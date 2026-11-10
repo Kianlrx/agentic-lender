@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if ownsUser(userId);
+    }
+
+    match /chats/{userId}/messages/{messageId} {
+      allow read: if ownsUser(userId);
+      allow create: if ownsUser(userId)
+        && request.resource.data.keys().hasOnly([
+          'sender', 'text', 'timestamp', 'isFromUser'
+        ])
+        && request.resource.data.keys().hasAll([
+          'sender', 'text', 'timestamp', 'isFromUser'
+        ])
+        && request.resource.data.sender is string
+        && request.resource.data.text is string
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.isFromUser == true;
+      allow update, delete: if false;
+    }
+
+    match /applications/{applicationId} {
+      // The current web UI is a shared pipeline for all signed-in accounts.
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'borrower', 'applicantEmail', 'phone', 'location',
+          'loanRequested', 'status', 'timestamp', 'createdBy'
+        ])
+        && request.resource.data.keys().hasAll([
+          'borrower', 'applicantEmail', 'phone', 'location',
+          'loanRequested', 'status', 'timestamp', 'createdBy'
+        ])
+        && request.resource.data.borrower is string
+        && request.resource.data.applicantEmail is string
+        && request.resource.data.phone is string
+        && request.resource.data.location is string
+        && request.resource.data.loanRequested is string
+        && request.resource.data.status == 'Applied'
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'borrower', 'applicantEmail', 'phone', 'location', 'loanRequested'
+        ])
+        && request.resource.data.borrower is string
+        && request.resource.data.applicantEmail is string
+        && request.resource.data.phone is string
+        && request.resource.data.location is string
+        && request.resource.data.loanRequested is string;
+      allow delete: if signedIn();
+    }
+  }
+}

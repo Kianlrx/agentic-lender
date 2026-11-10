@@ -1,0 +1,210 @@
+package com.example.agenticlender
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.agenticlender.ui.theme.AgenticLenderTheme
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            AgenticLenderTheme {
+                MainFunction()
+            }
+        }
+    }
+}
+
+@Composable
+fun MainFunction(modifier: Modifier = Modifier) {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    // Show navigation bar on main app screens once logged in
+    val authRoutes = listOf(
+        Screen.LandingScreen.route,
+        Screen.RegisterScreen.route,
+        Screen.LoginScreen.route,
+        Screen.VerifyEmailScreen.route,
+        Screen.ResetPasswordScreen.route,
+        Screen.CreateProfileScreen.route
+    )
+    val showBottomBar = currentRoute != null && currentRoute !in authRoutes
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar {
+                    navItems.forEach { item ->
+                        val isSelected = currentRoute == item.route
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = {
+                                if (!isSelected) {
+                                    navController.navigate(item.route) {
+                                        popUpTo(Screen.UserDashboard.route) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = item.iconId,
+                                    contentDescription = item.label
+                                )
+                            },
+                            label = { Text(item.label) }
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.LandingScreen.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.LandingScreen.route) {
+                LandingScreen(
+                    onNavigateToRegister = { navController.navigate(Screen.RegisterScreen.route) },
+                    onNavigateToLogin = { navController.navigate(Screen.LoginScreen.route) }
+                )
+            }
+            composable(Screen.RegisterScreen.route) {
+                RegisterScreen(
+                    onNavigateToLogin = { navController.navigate(Screen.LoginScreen.route) },
+                    onNavigateToResetPassword = { navController.navigate(Screen.ResetPasswordScreen.route) },
+                    onNavigateToVerifyEmail = {
+                        navController.navigate(Screen.CreateProfileScreen.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.VerifyEmailScreen.route) {
+                VerifyEmailScreen(
+                    onVerified = {
+                        navController.navigate(Screen.CreateProfileScreen.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    },
+                    onBackToLogin = {
+                        navController.navigate(Screen.LoginScreen.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.ResetPasswordScreen.route) {
+                ResetPasswordScreen(
+                    onNavigateToLogin = {
+                        navController.navigate(Screen.LoginScreen.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.CreateProfileScreen.route) {
+                CreateProfileScreen(
+                    onProfileCreated = {
+                        navController.navigate(Screen.UserDashboard.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.LoginScreen.route) {
+                LoginScreen(
+                    onNavigateToRegister = { navController.navigate(Screen.RegisterScreen.route) },
+                    onNavigateToResetPassword = { navController.navigate(Screen.ResetPasswordScreen.route) },
+                    onNavigateToVerifyEmail = { navController.navigate(Screen.VerifyEmailScreen.route) },
+                    onNavigateToSignIn = { role ->
+                        navController.navigate(Screen.UserDashboard.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.UserDashboard.route) {
+                UserDashboard(
+                    onNavigateToApplication = { navController.navigate(Screen.ApplicationScreen.route) },
+                    onNavigateToMessages = { navController.navigate(Screen.MessageScreen.route) },
+                    onNavigateToDocuments = { navController.navigate(Screen.DocumentsScreen.route) }
+                )
+            }
+            composable(Screen.ApplicationScreen.route) {
+                ApplicationScreen(
+                    onNavigateToPersonalDetails = { navController.navigate(Screen.PersonalDetailsScreen.route) },
+                    onNavigateToEmployment = { navController.navigate(Screen.EmploymentAndIncomeScreen.route) },
+                    onNavigateToDebtsAndCommitments = { navController.navigate(Screen.DebtsAndCommitmentsScreen.route) },
+                    onNavigateToDepositAndAssets = { navController.navigate(Screen.DepositAndAssetsScreen.route) },
+                    onNavigateToLoanRequest = { navController.navigate(Screen.LoanRequestScreen.route) },
+                    onNavigateToPropertyDetails = { navController.navigate(Screen.PropertyDetailsScreen.route) },
+                    onNavigateToUpload = { navController.navigate(Screen.DocumentUploadScreen.route) },
+                    onNavigateToConsent = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) }
+                )
+            }
+            composable(Screen.DocumentsScreen.route) { DocumentsScreen() }
+            composable(Screen.MessageScreen.route) { MessageScreen() }
+            composable(Screen.MoreScreen.route) {
+                MoreScreen(
+                    onNavigateToProfile = { navController.navigate(Screen.ProfileScreen.route) },
+                    onNavigateToSettings = { navController.navigate(Screen.SettingsScreen.route) },
+                    onNavigateToHelp = { navController.navigate(Screen.HelpScreen.route) },
+                    onNavigateToPayment = { navController.navigate(Screen.PaymentScreen.route) },
+                    onLogout = {
+                        navController.navigate(Screen.LandingScreen.route) {
+                            popUpTo(Screen.UserDashboard.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.ProfileScreen.route) { ProfileScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.SettingsScreen.route) { SettingsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.HelpScreen.route) { HelpScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.PaymentScreen.route) { PaymentScreen(onNavigateBack = { navController.popBackStack() }) }
+
+            composable(Screen.PersonalDetailsScreen.route) {
+                PersonalDetailsScreen(
+                    onNavigateNext = { navController.navigate(Screen.EmploymentAndIncomeScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.EmploymentAndIncomeScreen.route) { EmploymentAndIncomeScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.DebtsAndCommitmentsScreen.route) { DebtsAndCommitmentsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.DepositAndAssetsScreen.route) { DepositAndAssetsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.LoanRequestScreen.route) {
+                LoanRequestScreen(
+                    onNavigateNext = { navController.navigate(Screen.PropertyDetailsScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.PropertyDetailsScreen.route) { PropertyDetailsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.DocumentUploadScreen.route) { DocumentUploadScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.ConsentAndDeclarationsScreen.route) { ConsentAndDeclarationsScreen(onNavigateBack = { navController.popBackStack() }) }
+        }
+    }
+}

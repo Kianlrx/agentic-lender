@@ -1,0 +1,50 @@
+# IntelliJ IDEA / .idea folder
+.idea/
+
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration files (sdk path, secrets, etc.)
+local.properties
+secrets.properties
+*.local
+
+# Visual Studio Code files
+.vscode/
+
+# Native build files
+.externalNativeBuild/
+.cxx/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Captures of the Android emulator
+/captures/
+
+# Kotlin incremental compilation cache
+.kotlin/

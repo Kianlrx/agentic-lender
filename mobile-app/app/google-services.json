@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "138057350474",
+    "project_id": "benchodlender",
+    "storage_bucket": "benchodlender.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:138057350474:android:f2ce86d5c3e1b2a32a55b3",
+        "android_client_info": {
+          "package_name": "com.example.agenticlender"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "138057350474-dkdnnb2jofbse97ff5207kbk6kusctp4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkuaZLSTfM9VddYvfraN-tIU15V3gRC2c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "138057350474-dkdnnb2jofbse97ff5207kbk6kusctp4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
