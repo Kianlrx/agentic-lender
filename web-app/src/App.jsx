@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useRef, useState, useEffect } from 'react';
 import './App.css';
-import { auth, db } from './firebase';
+import { auth, db, firebaseApp } from './firebase';
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
@@ -10,7 +10,9 @@ import {
   signOut,
   updatePassword
 } from 'firebase/auth';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+
+const MortgageApplication = lazy(() => import('./MortgageApplication'));
 
 const inputStyle = {
   boxSizing: 'border-box',
@@ -53,12 +55,10 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [pipeline, setPipeline] = useState([]);
   const [pipelineLoading, setPipelineLoading] = useState(false);
-  const [applicationForm, setApplicationForm] = useState(applicationFields);
   const [pipelineError, setPipelineError] = useState('');
-  const [applicationError, setApplicationError] = useState('');
-  const [applicationSuccess, setApplicationSuccess] = useState('');
-  const [applicationBusy, setApplicationBusy] = useState(false);
-  const applicationSubmitting = useRef(false);
+  const [mortgageSubmitting, setMortgageSubmitting] = useState(false);
+  const [mortgageSubmitError, setMortgageSubmitError] = useState('');
+  const mortgageSubmittingRef = useRef(false);
   const [page, setPage] = useState('pipeline');
   const [searchFields, setSearchFields] = useState({
     borrower: '',
@@ -117,7 +117,11 @@ export default function App() {
     setPipelineLoading(true);
     setPipelineError('');
 
-    const unsubscribe = onSnapshot(collection(db, "applications"), (querySnapshot) => {
+    const userApplications = query(
+      collection(db, 'applications'),
+      where('createdBy', '==', user.uid)
+    );
+    const unsubscribe = onSnapshot(userApplications, (querySnapshot) => {
       const apps = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPipeline(apps);
       setPipelineLoading(false);
@@ -150,6 +154,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    if (page === 'application' && !window.confirm('Leave this application? Your entered details will be lost.')) return;
     setAuthError('');
     try {
       await signOut(auth);
@@ -158,38 +163,74 @@ export default function App() {
     }
   };
 
-  const handleAddApplication = async (e) => {
-    e.preventDefault();
-    if (applicationSubmitting.current) return;
+  const handleMortgageSubmit = async (applicationData, fileGroups) => {
+    if (mortgageSubmittingRef.current) return;
 
-    applicationSubmitting.current = true;
-    setApplicationBusy(true);
-    setApplicationError('');
-    setApplicationSuccess('');
+    mortgageSubmittingRef.current = true;
+    setMortgageSubmitting(true);
+    setMortgageSubmitError('');
+    const applicationRef = doc(collection(db, 'applications'));
+    const uploadedPaths = [];
+    let storageApi;
+    let applicationStorage;
+
     try {
-      const application = {
-        borrower: applicationForm.borrower.trim(),
-        applicantEmail: applicationForm.applicantEmail.trim(),
-        phone: applicationForm.phone.trim(),
-        location: applicationForm.location.trim(),
-        loanRequested: applicationForm.loanRequested,
-        status: "Applied",
+      storageApi = await import('firebase/storage');
+      applicationStorage = storageApi.getStorage(firebaseApp);
+      const documents = [];
+      for (const [category, files] of Object.entries(fileGroups)) {
+        for (const [index, file] of files.entries()) {
+          const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+          const path = `mortgageApplications/${user.uid}/${applicationRef.id}/${category}-${index}-${safeName}`;
+          await storageApi.uploadBytes(storageApi.ref(applicationStorage, path), file, { contentType: file.type });
+          uploadedPaths.push(path);
+          documents.push({
+            category,
+            fileName: file.name,
+            storagePath: path,
+            contentType: file.type,
+            size: file.size
+          });
+        }
+      }
+
+      const primaryApplicant = applicationData.applicants[0];
+      await setDoc(applicationRef, {
+        borrower: primaryApplicant.legalName.trim(),
+        applicantEmail: primaryApplicant.email.trim(),
+        phone: primaryApplicant.phone.trim(),
+        location: applicationData.eircode || applicationData.propertyAddress || '',
+        loanRequested: applicationData.loanAmount,
+        status: 'Applied',
         timestamp: serverTimestamp(),
-        createdBy: user.uid
-      };
-      await addDoc(collection(db, "applications"), application);
-      setApplicationForm(applicationFields);
-      setApplicationSuccess('Application submitted successfully.');
+        createdBy: user.uid,
+        applicationData,
+        consent: { aiAnalysis: applicationData.declarations.aiAnalysis },
+        documents
+      });
+
+      setApplicationActionSuccess('Mortgage application submitted successfully.');
+      setPage('pipeline');
     } catch (error) {
-      console.error("Error writing to Firebase:", error);
-      setApplicationError(
+      console.error('Error submitting mortgage application:', error);
+      const cleanupResults = storageApi && applicationStorage
+        ? await Promise.allSettled(
+          uploadedPaths.map(path => storageApi.deleteObject(storageApi.ref(applicationStorage, path)))
+        )
+        : [];
+      cleanupResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`Could not clean up uploaded application document ${uploadedPaths[index]}:`, result.reason);
+        }
+      });
+      setMortgageSubmitError(
         error.code === 'permission-denied'
-          ? 'Firebase denied this write. Check that you are signed in and that your Firestore security rules allow signed-in users to add applications.'
-          : `Could not submit application: ${error.message}`
+          ? 'Firebase denied this submission. Check the Firestore and Storage rules for mortgage applications.'
+          : `Could not submit application: ${getErrorMessage(error)}`
       );
     } finally {
-      applicationSubmitting.current = false;
-      setApplicationBusy(false);
+      mortgageSubmittingRef.current = false;
+      setMortgageSubmitting(false);
     }
   };
 
@@ -416,7 +457,11 @@ export default function App() {
                   aria-current={page === pageId ? 'page' : undefined}
                   aria-label={label}
                   title={label}
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (page === 'application' && !window.confirm('Leave this application? Your entered details will be lost.')) {
+                      return;
+                    }
                     setPage(pageId);
                     setSelectedApplication(null);
                   }}
@@ -452,39 +497,40 @@ export default function App() {
           </header>
           {authError ? <p role="alert" className="error-message">{authError}</p> : null}
 
+          {page === 'application' ? (
+            <Suspense fallback={<p className="muted-message">Loading mortgage application...</p>}>
+              <MortgageApplication
+                onCancel={() => {
+                  if (!window.confirm('Exit this application? Your entered details will be lost.')) return;
+                  setMortgageSubmitError('');
+                  setPage('pipeline');
+                }}
+                onSubmit={handleMortgageSubmit}
+                submitting={mortgageSubmitting}
+                error={mortgageSubmitError}
+              />
+            </Suspense>
+          ) : null}
+
           {page === 'pipeline' ? (
             <section>
-              <form onSubmit={handleAddApplication} style={panelStyle} className="application-form">
-                <h2>Submit Application</h2>
-                <div className="form-grid">
-                  <label style={fieldStyle}>Borrower Name
-                    <input type="text" value={applicationForm.borrower} onChange={e => setApplicationForm({ ...applicationForm, borrower: e.target.value })} style={inputStyle} required />
-                  </label>
-                  <label style={fieldStyle}>Email
-                    <input type="email" value={applicationForm.applicantEmail} onChange={e => setApplicationForm({ ...applicationForm, applicantEmail: e.target.value })} style={inputStyle} required />
-                  </label>
-                  <label style={fieldStyle}>Phone Number
-                    <input type="tel" value={applicationForm.phone} onChange={e => setApplicationForm({ ...applicationForm, phone: e.target.value })} style={inputStyle} required />
-                  </label>
-                  <label style={fieldStyle}>Location
-                    <input type="text" value={applicationForm.location} onChange={e => setApplicationForm({ ...applicationForm, location: e.target.value })} style={inputStyle} required />
-                  </label>
-                  <label style={fieldStyle} className="loan-field">Loan Requested (€)
-                    <input className="loan-requested-input" type="number" min="1" value={applicationForm.loanRequested} onChange={e => setApplicationForm({ ...applicationForm, loanRequested: e.target.value })} style={inputStyle} required />
-                  </label>
-                </div>
-                <button type="submit" disabled={applicationBusy} className="primary-button">
-                  {applicationBusy ? 'Submitting...' : 'Submit'}
+              <div className="pipeline-heading-row">
+                <h2 className="section-heading">Active Pipeline Volume</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPage('application');
+                    setSelectedApplication(null);
+                  }}
+                  className="primary-button"
+                >
+                  Submit an Application
                 </button>
-                {applicationSuccess ? <p role="status" className="success-message">{applicationSuccess}</p> : null}
-                {applicationError ? <p role="alert" className="error-message">{applicationError}</p> : null}
-              </form>
-
-              <h2 className="section-heading">Active Pipeline Volume</h2>
+              </div>
               {pipelineError ? <p role="alert" className="error-message">Could not load applications: {pipelineError}</p> : null}
               {applicationActionSuccess ? <p role="status" className="success-message">{applicationActionSuccess}</p> : null}
               {pipelineLoading ? <p className="muted-message">Loading applications...</p> : null}
-              {!pipelineLoading && !pipelineError && pipeline.length === 0 ? <p className="muted-message">No applications found. Enter a test application above to verify connection...</p> : null}
+              {!pipelineLoading && !pipelineError && pipeline.length === 0 ? <p className="muted-message">No applications found.</p> : null}
               <ul className="application-list">
                 {pipeline.map(app => (
                   <li key={app.id} className="application-card">

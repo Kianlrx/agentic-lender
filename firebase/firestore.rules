@@ -31,12 +31,12 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      // The current web UI is a shared pipeline for all signed-in accounts.
-      allow read: if signedIn();
+      allow read: if signedIn() && resource.data.createdBy == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'borrower', 'applicantEmail', 'phone', 'location',
-          'loanRequested', 'status', 'timestamp', 'createdBy'
+          'loanRequested', 'status', 'timestamp', 'createdBy',
+          'applicationData', 'documents', 'consent'
         ])
         && request.resource.data.keys().hasAll([
           'borrower', 'applicantEmail', 'phone', 'location',
@@ -49,8 +49,15 @@ service cloud.firestore {
         && request.resource.data.loanRequested is string
         && request.resource.data.status == 'Applied'
         && request.resource.data.timestamp is timestamp
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && (!('applicationData' in request.resource.data)
+          || request.resource.data.applicationData is map)
+        && (!('documents' in request.resource.data)
+          || request.resource.data.documents is list)
+        && (!('consent' in request.resource.data)
+          || request.resource.data.consent is map);
       allow update: if signedIn()
+        && resource.data.createdBy == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'borrower', 'applicantEmail', 'phone', 'location', 'loanRequested'
         ])
@@ -59,7 +66,7 @@ service cloud.firestore {
         && request.resource.data.phone is string
         && request.resource.data.location is string
         && request.resource.data.loanRequested is string;
-      allow delete: if signedIn();
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
     }
   }
 }

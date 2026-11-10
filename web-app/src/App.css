@@ -408,10 +408,10 @@
   flex: 0 0 auto;
   min-height: 40px;
   padding: 0.5rem 0.85rem;
-  border: 1px solid var(--border);
+  border: 1px solid #b3261e;
   border-radius: var(--control-radius);
-  background: transparent;
-  color: var(--muted-text);
+  background: #b3261e;
+  color: #fff;
   font: inherit;
   font-size: 0.9rem;
   cursor: pointer;
@@ -419,9 +419,8 @@
 }
 
 .sign-out-button:hover:not(:disabled) {
-  border-color: var(--border);
-  background: var(--muted-bg);
-  color: var(--text);
+  border-color: #8c1d18;
+  background: #8c1d18;
 }
 
 .app-navigation {
@@ -463,6 +462,14 @@
   color: var(--link);
 }
 
+.pipeline-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
 .navigation-icon {
   flex: 0 0 auto;
   width: 20px;
@@ -488,13 +495,11 @@
   max-width: 360px;
 }
 
-.application-form h2,
 .password-form h3,
 .profile-card h3 {
   margin: 0 0 1.25rem;
 }
 
-.application-form,
 .password-form,
 .profile-card,
 .application-detail-card {
@@ -504,16 +509,12 @@
   box-shadow: var(--panel-shadow);
 }
 
-.application-form {
-  margin-bottom: 2rem;
-}
-
 .page-heading {
   margin: 0 0 1.25rem;
 }
 
 .section-heading {
-  margin: 0 0 1rem;
+  margin: 0;
 }
 
 .primary-button,
@@ -812,10 +813,13 @@
   }
 
   .app-header {
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
   .app-navigation {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
     gap: 0.15rem;
   }
 
@@ -837,8 +841,14 @@
   }
 
   .sign-out-button {
+    margin-left: auto;
     min-height: 38px;
     padding: 0.4rem 0.65rem;
+  }
+
+  .pipeline-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .form-grid {
