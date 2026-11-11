@@ -172,7 +172,7 @@
 }
 
 .mortgage-field small,
-.mortgage-upload small {
+.mortgage-upload-placeholder small {
   color: var(--muted-text);
   font-size: 0.8rem;
   font-weight: 400;
@@ -192,18 +192,18 @@
   font-weight: 400;
 }
 
-.mortgage-select-wrap {
+.mortgage-custom-select {
   position: relative;
   display: block;
 }
 
-.mortgage-select-wrap select {
+.mortgage-custom-select-input {
   padding-right: 2.5rem;
-  appearance: none;
-  -webkit-appearance: none;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.mortgage-select-wrap::after {
+.mortgage-custom-select::after {
   position: absolute;
   top: 50%;
   right: 1rem;
@@ -216,11 +216,110 @@
   transform: translateY(-70%) rotate(45deg);
 }
 
+.mortgage-custom-select-options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  left: 0;
+  max-height: 15rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+}
+
+.mortgage-custom-select-options button {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mortgage-custom-select-options > button {
+  border-radius: 9px 9px 0 0;
+}
+
+.mortgage-custom-select-options div button:last-child {
+  border-radius: 0 0 9px 9px;
+}
+
+.mortgage-custom-select-options button:hover,
+.mortgage-custom-select-options button:focus-visible,
+.mortgage-custom-select-options button[aria-selected="true"] {
+  outline: none;
+  background: var(--muted-bg);
+}
+
 .mortgage-field input:focus,
 .mortgage-field select:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.nationality-select {
+  position: relative;
+}
+
+.nationality-select > input {
+  border-radius: 12px;
+}
+
+.nationality-options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  left: 0;
+  max-height: 15rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+}
+
+.nationality-options button {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nationality-options button:first-child {
+  border-radius: 11px 11px 0 0;
+}
+
+.nationality-options button:last-child {
+  border-radius: 0 0 11px 11px;
+}
+
+.nationality-options button:hover,
+.nationality-options button:focus-visible,
+.nationality-options button[aria-selected="true"] {
+  outline: none;
+  background: var(--muted-bg);
+}
+
+.nationality-no-results {
+  display: block;
+  padding: 0.65rem 0.8rem;
+  color: var(--muted-text);
+  font-weight: 400;
 }
 
 .mortgage-note {
@@ -356,7 +455,7 @@
   gap: 0.75rem;
 }
 
-.mortgage-upload {
+.mortgage-upload-placeholder {
   display: grid;
   gap: 0.5rem;
   padding: 1rem;
@@ -364,23 +463,6 @@
   border-radius: var(--control-radius);
   color: var(--text);
   font-weight: 600;
-}
-
-.mortgage-upload input {
-  box-sizing: border-box;
-  width: 100%;
-  color: var(--text);
-  font: inherit;
-  font-weight: 400;
-}
-
-.mortgage-upload ul {
-  margin: 0;
-  padding-left: 1.25rem;
-  color: var(--muted-text);
-  font-size: 0.85rem;
-  font-weight: 400;
-  overflow-wrap: anywhere;
 }
 
 .mortgage-declarations {
