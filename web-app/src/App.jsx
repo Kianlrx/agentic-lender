@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useRef, useState, useEffect } from 'react';
 import './App.css';
-import { auth, db, firebaseApp } from './firebase';
+import { auth, db } from './firebase';
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
@@ -163,37 +163,14 @@ export default function App() {
     }
   };
 
-  const handleMortgageSubmit = async (applicationData, fileGroups) => {
+  const handleMortgageSubmit = async (applicationData) => {
     if (mortgageSubmittingRef.current) return;
 
     mortgageSubmittingRef.current = true;
     setMortgageSubmitting(true);
     setMortgageSubmitError('');
     const applicationRef = doc(collection(db, 'applications'));
-    const uploadedPaths = [];
-    let storageApi;
-    let applicationStorage;
-
     try {
-      storageApi = await import('firebase/storage');
-      applicationStorage = storageApi.getStorage(firebaseApp);
-      const documents = [];
-      for (const [category, files] of Object.entries(fileGroups)) {
-        for (const [index, file] of files.entries()) {
-          const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
-          const path = `mortgageApplications/${user.uid}/${applicationRef.id}/${category}-${index}-${safeName}`;
-          await storageApi.uploadBytes(storageApi.ref(applicationStorage, path), file, { contentType: file.type });
-          uploadedPaths.push(path);
-          documents.push({
-            category,
-            fileName: file.name,
-            storagePath: path,
-            contentType: file.type,
-            size: file.size
-          });
-        }
-      }
-
       const primaryApplicant = applicationData.applicants[0];
       await setDoc(applicationRef, {
         borrower: primaryApplicant.legalName.trim(),
@@ -206,26 +183,16 @@ export default function App() {
         createdBy: user.uid,
         applicationData,
         consent: { aiAnalysis: applicationData.declarations.aiAnalysis },
-        documents
+        documents: []
       });
 
       setApplicationActionSuccess('Mortgage application submitted successfully.');
       setPage('pipeline');
     } catch (error) {
       console.error('Error submitting mortgage application:', error);
-      const cleanupResults = storageApi && applicationStorage
-        ? await Promise.allSettled(
-          uploadedPaths.map(path => storageApi.deleteObject(storageApi.ref(applicationStorage, path)))
-        )
-        : [];
-      cleanupResults.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          console.error(`Could not clean up uploaded application document ${uploadedPaths[index]}:`, result.reason);
-        }
-      });
       setMortgageSubmitError(
         error.code === 'permission-denied'
-          ? 'Firebase denied this submission. Check the Firestore and Storage rules for mortgage applications.'
+          ? 'Firebase denied this submission. Check the Firestore rules for mortgage applications.'
           : `Could not submit application: ${getErrorMessage(error)}`
       );
     } finally {

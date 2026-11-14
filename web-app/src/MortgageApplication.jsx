@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './MortgageApplication.css';
 
 const steps = [
@@ -27,7 +27,7 @@ const createApplicant = () => ({
   visaExpiry: '',
   email: '',
   phone: '',
-  addressHistory: [{ address: '', eircode: '', from: '', to: '' }],
+  addressHistory: [{ address: '', eircode: '', from: '', to: '', current: false }],
   dependantsCount: '0',
   dependantAges: '',
   accommodation: '',
@@ -56,8 +56,8 @@ const createApplicant = () => ({
   accountant: '',
   bankAccounts: [{ provider: '', balance: '', monthlySaving: '', source: '' }],
   otherAssets: [{ description: '', value: '' }],
-  loans: [{ lender: '', balance: '', repayment: '', monthsRemaining: '', refinance: '' }],
-  creditCards: [{ provider: '', limit: '', balance: '' }],
+  loans: [],
+  creditCards: [],
   maintenanceAndChildcare: ''
 });
 
@@ -66,7 +66,7 @@ const createInitialForm = () => ({
   applicationKind: '',
   propertyFound: '',
   applicants: [createApplicant()],
-  existingProperties: [{ address: '', mortgageBalance: '', monthlyRepayment: '', forbearance: '' }],
+  existingProperties: [],
   insolvency: '',
   insolvencyDetails: '',
   futureChanges: '',
@@ -129,6 +129,16 @@ const selectOptions = {
   incomeCurrency: ['EUR', 'GBP', 'USD', 'Other'],
   refinance: ['Yes', 'No']
 };
+const nationalities = `Afghan|Albanian|Algerian|American|Andorran|Angolan|Argentine|Armenian|Australian|Austrian|Azerbaijani|Bahamian|Bahraini|Bangladeshi|Barbadian|Belarusian|Belgian|Belizean|Beninese|Bhutanese|Bolivian|Bosnian|Brazilian|British|Bulgarian|Burkinabé|Burmese|Burundian|Cambodian|Cameroonian|Canadian|Cape Verdean|Chadian|Chilean|Chinese|Colombian|Congolese|Costa Rican|Croatian|Cuban|Cypriot|Czech|Danish|Djiboutian|Dominican|Dutch|Ecuadorian|Egyptian|English|Eritrean|Estonian|Ethiopian|Fijian|Finnish|French|Gambian|Georgian|German|Ghanaian|Greek|Grenadian|Guatemalan|Guinean|Guyanese|Haitian|Honduran|Hungarian|Icelandic|Indian|Indonesian|Iranian|Iraqi|Irish|Israeli|Italian|Ivorian|Jamaican|Japanese|Jordanian|Kazakh|Kenyan|Kuwaiti|Kyrgyz|Lao|Latvian|Lebanese|Liberian|Libyan|Liechtenstein|Lithuanian|Luxembourger|Malagasy|Malawian|Malaysian|Maldivian|Malian|Maltese|Mauritanian|Mauritian|Mexican|Moldovan|Monegasque|Mongolian|Montenegrin|Moroccan|Mozambican|Namibian|Nepalese|New Zealander|Nicaraguan|Nigerian|North Korean|Northern Irish|Norwegian|Omani|Pakistani|Palauan|Palestinian|Panamanian|Papua New Guinean|Paraguayan|Peruvian|Polish|Portuguese|Qatari|Romanian|Russian|Rwandan|Saint Lucian|Salvadoran|Samoan|Saudi Arabian|Scottish|Senegalese|Serbian|Singaporean|Slovak|Slovenian|Somali|South African|South Korean|Spanish|Sri Lankan|Sudanese|Surinamese|Swedish|Swiss|Syrian|Taiwanese|Tajik|Tanzanian|Thai|Togolese|Trinidadian|Tunisian|Turkish|Turkmen|Tuvaluan|Ugandan|Ukrainian|Emirati|Uruguayan|Uzbek|Vatican citizen|Venezuelan|Vietnamese|Welsh|Yemeni|Zambian|Zimbabwean`
+  .split('|')
+  .sort((first, second) => first.localeCompare(second));
+const eeaNationalities = new Set([
+  'Austrian', 'Belgian', 'Bulgarian', 'Croatian', 'Cypriot', 'Czech', 'Danish',
+  'Dutch', 'Estonian', 'Finnish', 'French', 'German', 'Greek', 'Hungarian',
+  'Icelandic', 'Irish', 'Italian', 'Latvian', 'Liechtenstein', 'Lithuanian',
+  'Luxembourger', 'Maltese', 'Norwegian', 'Polish', 'Portuguese', 'Romanian',
+  'Slovak', 'Slovenian', 'Spanish', 'Swedish'
+]);
 
 const readPath = (object, path) => path.reduce((value, key) => value?.[key], object);
 
@@ -151,9 +161,215 @@ const formatEuro = (amount) => new Intl.NumberFormat('en-IE', {
   maximumFractionDigits: 0
 }).format(amount);
 
+const calculateIrishStampDuty = (price) => (
+  Math.round((
+    Math.min(price, 1_000_000) * 0.01
+    + Math.min(Math.max(price - 1_000_000, 0), 500_000) * 0.02
+    + Math.max(price - 1_500_000, 0) * 0.06
+  ) * 100) / 100
+);
+
+function NationalitySelect({ value, onChange, required, listId }) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const filteredNationalities = nationalities.filter(nationality =>
+    nationality.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+  );
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.setCustomValidity(value ? '' : 'Select a nationality from the suggestions.');
+    }
+  }, [value]);
+
+  const selectNationality = (nationality) => {
+    onChange(nationality);
+    setQuery(nationality);
+    setOpen(false);
+    inputRef.current?.setCustomValidity('');
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'ArrowDown' && filteredNationalities.length) {
+      event.preventDefault();
+      setOpen(true);
+      listRef.current?.querySelector('button')?.focus();
+    } else if (event.key === 'Enter' && open && filteredNationalities.length) {
+      event.preventDefault();
+      selectNationality(filteredNationalities[0]);
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+      setQuery(value);
+    }
+  };
+
+  const handleOptionKeyDown = (event, index) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusOption(index + (event.key === 'ArrowDown' ? 1 : -1));
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div
+      className="nationality-select"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listId}
+        autoComplete="off"
+        placeholder="Search nationalities"
+        value={value || query}
+        required={required}
+        onFocus={() => setOpen(true)}
+        onChange={event => {
+          setQuery(event.target.value);
+          onChange('');
+          setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      {open ? (
+        <div className="nationality-options" id={listId} role="listbox" ref={listRef}>
+          {filteredNationalities.length ? filteredNationalities.map(nationality => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === nationality}
+              key={nationality}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => selectNationality(nationality)}
+            >
+              {nationality}
+            </button>
+          )) : <span className="nationality-no-results">No matching nationalities</span>}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FormSelect({ value, onChange, options, required, listId }) {
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const selectedIndex = options.indexOf(value);
+
+  const selectOption = (option) => {
+    onChange(option);
+    setOpen(false);
+  };
+
+  const focusOption = (index) => {
+    const optionButtons = listRef.current?.querySelectorAll('button');
+    if (!optionButtons?.length) return;
+    const wrappedIndex = (index + optionButtons.length) % optionButtons.length;
+    optionButtons[wrappedIndex].focus();
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        window.requestAnimationFrame(() => {
+          focusOption(selectedIndex >= 0
+            ? selectedIndex + 1
+            : event.key === 'ArrowDown' ? 1 : options.length);
+        });
+      } else {
+        const currentIndex = Array.from(listRef.current?.querySelectorAll('button') || [])
+          .indexOf(document.activeElement);
+        focusOption(currentIndex + (event.key === 'ArrowDown' ? 1 : -1));
+      }
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (!open) setOpen(true);
+      else if (selectedIndex >= 0) selectOption(options[selectedIndex]);
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div
+      className="mortgage-custom-select"
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
+      <input
+        ref={inputRef}
+        className="mortgage-custom-select-input"
+        type="text"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-required={required}
+        readOnly
+        required={required}
+        value={value}
+        placeholder="Select an option"
+        onClick={() => setOpen(current => !current)}
+        onKeyDown={handleKeyDown}
+      />
+      {open ? (
+        <div className="mortgage-custom-select-options" id={listId} role="listbox" ref={listRef}>
+          <button
+            type="button"
+            role="option"
+            aria-selected={!value}
+            className="mortgage-custom-select-placeholder"
+            onClick={() => {
+              onChange('');
+              setOpen(false);
+              inputRef.current?.focus();
+            }}
+            onKeyDown={event => handleOptionKeyDown(event, 0)}
+          >
+            Select an option
+          </button>
+          <div>
+            {options.map((option, index) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === option}
+                key={option}
+                onClick={() => {
+                  selectOption(option);
+                  inputRef.current?.focus();
+                }}
+                onKeyDown={event => {
+                  handleOptionKeyDown(event, index + 1);
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function MortgageApplication({ onCancel, onSubmit, submitting, error }) {
   const [form, setForm] = useState(createInitialForm);
-  const [files, setFiles] = useState({});
   const [step, setStep] = useState(0);
   const [formError, setFormError] = useState('');
   const formRef = useRef(null);
@@ -165,41 +381,69 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
         ? updated.applicants.length === 1 ? [...updated.applicants, createApplicant()] : updated.applicants.slice(0, 2)
         : updated.applicants.slice(0, 1));
     }
+    if (path[0] === 'applicants' && path[2] === 'nationality') {
+      const nonEea = value ? (eeaNationalities.has(value) ? 'No' : 'Yes') : '';
+      updated = updatePath(updated, ['applicants', path[1], 'nonEea'], nonEea);
+      if (nonEea !== 'Yes') {
+        updated = updatePath(updated, ['applicants', path[1], 'visaType'], '');
+        updated = updatePath(updated, ['applicants', path[1], 'visaExpiry'], '');
+      }
+    }
+    if (path.length === 1 && path[0] === 'applicationType') {
+      updated = updatePath(updated, ['stampDuty'], value === 'Purchase' && updated.purchasePrice !== ''
+        ? calculateIrishStampDuty(Number(updated.purchasePrice))
+        : 0);
+    }
+    if (path.length === 1 && path[0] === 'purchasePrice') {
+      updated = updatePath(updated, ['stampDuty'], updated.applicationType === 'Purchase' && value !== ''
+        ? calculateIrishStampDuty(Number(value))
+        : 0);
+    }
     return updated;
   });
   const read = (path) => readPath(form, path);
+  const visibleStepIndices = form.propertyFound === 'No'
+    ? steps.map((_, index) => index).filter(index => index !== 4)
+    : steps.map((_, index) => index);
+  const currentStepPosition = visibleStepIndices.indexOf(step);
 
   const renderField = (label, path, options = {}) => {
     const value = read(path) ?? '';
+    const required = Boolean(options.required);
     const choices = options.options || (options.type === 'yesNo' ? selectOptions.yesNo : null);
     return (
       <label className={fieldClass} key={path.join('.')}>
         <span>
           {label}{options.unit ? ` (${options.unit})` : ''}
-          {options.required ? <span className="mortgage-required-marker"> *</span> : null}
+          {required ? <span className="mortgage-required-marker"> *</span> : null}
         </span>
-        {choices ? (
-          <span className="mortgage-select-wrap">
-            <select
-              value={value}
-              onChange={event => update(path, event.target.value)}
-              required={options.required}
-            >
-              <option value="">Select an option</option>
-              {choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-            </select>
-          </span>
+        {options.nationality ? (
+          <NationalitySelect
+            value={value}
+            onChange={selected => update(path, selected)}
+            required={required}
+            listId={`nationality-options-${path.join('-')}`}
+          />
+        ) : choices ? (
+          <FormSelect
+            value={value}
+            onChange={selected => update(path, selected)}
+            options={choices}
+            required={required}
+            listId={`select-options-${path.join('-')}`}
+          />
         ) : (
           <input
             type={options.type || 'text'}
             value={value}
             onChange={event => update(path, event.target.value)}
-            required={options.required}
+            required={required}
             min={options.min}
             max={options.max}
             step={options.step}
             maxLength={options.maxLength}
             autoComplete={options.autoComplete}
+            readOnly={options.readOnly}
           />
         )}
         {options.help ? <small>{options.help}</small> : null}
@@ -215,11 +459,17 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
         onChange={event => update(path, event.target.checked)}
         required={required}
       />
-      <span>{label}{required ? ' *' : ''}</span>
+      <span>{label}{required ? <span className="mortgage-required-marker"> *</span> : null}</span>
     </label>
   );
 
-  const renderRepeatGroup = (title, path, fields, { itemLabel = title, addLabel = `Add ${title.toLowerCase()}` } = {}) => {
+  const renderRepeatGroup = (title, path, fields, {
+    itemLabel = title,
+    addLabel = `Add ${title.toLowerCase()}`,
+    currentKey,
+    currentLabel = 'Current address',
+    allowEmpty = false
+  } = {}) => {
     const items = read(path) || [];
     return (
       <div className="mortgage-repeat-group" key={path.join('.')}>
@@ -228,9 +478,29 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           <fieldset className="mortgage-repeat-item" key={`${path.join('.')}-${index}`}>
             <legend>{itemLabel} {index + 1}.</legend>
             <div className="mortgage-form-grid">
-              {fields.map(field => renderField(field.label, [...path, index, field.key], field.options || {}))}
+              {fields.map(field => {
+                const options = field.options || {};
+                const required = options.requiredWhen
+                  ? options.requiredWhen(item)
+                  : options.required;
+                return renderField(field.label, [...path, index, field.key], { ...options, required });
+              })}
             </div>
-            {items.length > 1 ? (
+            {currentKey ? (
+              <label className="mortgage-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item[currentKey])}
+                  onChange={event => {
+                    const updatedItem = { ...item, [currentKey]: event.target.checked };
+                    if (event.target.checked) updatedItem.to = '';
+                    update(path, items.map((existing, itemIndex) => itemIndex === index ? updatedItem : existing));
+                  }}
+                />
+                <span>{currentLabel}</span>
+              </label>
+            ) : null}
+            {items.length > 1 || allowEmpty ? (
               <button
                 type="button"
                 className="secondary-button mortgage-remove-button"
@@ -244,7 +514,13 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
         <button
           type="button"
           className="secondary-button"
-          onClick={() => update(path, [...items, Object.fromEntries(fields.map(field => [field.key, '']))])}
+          onClick={() => update(path, [
+            ...items,
+            {
+              ...Object.fromEntries(fields.map(field => [field.key, ''])),
+              ...(currentKey ? { [currentKey]: false } : {})
+            }
+          ])}
         >
           {addLabel}
         </button>
@@ -262,30 +538,16 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
     update(['applicants'], form.applicants.filter((_, applicantIndex) => applicantIndex !== index));
   };
 
-  const handleFiles = (category, event) => {
-    const selected = Array.from(event.target.files || []);
-    const invalidFile = selected.find(file =>
-      file.size > 15 * 1024 * 1024
-      || !['application/pdf', 'image/jpeg', 'image/png'].includes(file.type)
-    );
-    if (invalidFile) {
-      setFormError(`${invalidFile.name} must be a PDF, JPEG or PNG file no larger than 15 MB.`);
-      event.target.value = '';
-      return;
-    }
-    setFormError('');
-    setFiles(current => ({ ...current, [category]: selected }));
-    event.target.value = '';
-  };
-
   const nextStep = () => {
     if (!formRef.current?.reportValidity()) return;
-    setStep(current => Math.min(current + 1, steps.length - 1));
+    const nextStepIndex = visibleStepIndices[currentStepPosition + 1];
+    if (nextStepIndex !== undefined) setStep(nextStepIndex);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const previousStep = () => {
-    setStep(current => Math.max(current - 1, 0));
+    const previousStepIndex = visibleStepIndices[currentStepPosition - 1];
+    if (previousStepIndex !== undefined) setStep(previousStepIndex);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -301,7 +563,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           </div>
           <div className="mortgage-note">
             <strong>Not found a property yet?</strong>
-            <span>You can continue with an Agreement in Principle and add property details later.</span>
+            <span>You can continue with an Agreement in Principle, using an estimated target price and deposit for the costs section. Add property details later.</span>
           </div>
         </>
       );
@@ -324,13 +586,15 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                   {renderField('Legal name', [...applicantPath, 'legalName'], { required: true, autoComplete: 'name' })}
                   {renderField('Previous / maiden name', [...applicantPath, 'previousName'])}
                   {renderField('Date of birth', [...applicantPath, 'dateOfBirth'], { type: 'date', required: true })}
-                  {renderField('Gender (optional)', [...applicantPath, 'gender'], { options: selectOptions.gender })}
-                  {renderField('PPSN', [...applicantPath, 'ppsn'], { help: 'Your PPS number is stored with this application.' })}
+                  {renderField('Gender', [...applicantPath, 'gender'], { options: selectOptions.gender })}
+                  {renderField('PPSN', [...applicantPath, 'ppsn'], {required: true, help: 'Your PPS number is stored with this application.' })}
                   {renderField('Marital / civil status', [...applicantPath, 'maritalStatus'], { options: selectOptions.maritalStatus, required: true })}
-                  {renderField('Nationality', [...applicantPath, 'nationality'], { required: true })}
+                  {renderField('Nationality', [...applicantPath, 'nationality'], { nationality: true, required: true })}
                   {renderField('Residency status', [...applicantPath, 'residency'], { options: selectOptions.residency, required: true })}
                   {renderField('Years living in Ireland', [...applicantPath, 'yearsInIreland'], { type: 'number', min: 0, step: 1, required: true })}
-                  {renderField('Non-EEA national?', [...applicantPath, 'nonEea'], { type: 'yesNo', required: true })}
+                  {applicant.nationality && !eeaNationalities.has(applicant.nationality)
+                    ? renderField('Non-EEA national?', [...applicantPath, 'nonEea'], { type: 'yesNo', required: true })
+                    : null}
                   {applicant.nonEea === 'Yes' ? (
                     <>
                       {renderField('Visa / IRP stamp', [...applicantPath, 'visaType'], { required: true })}
@@ -346,10 +610,14 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                 </div>
                 {renderRepeatGroup('Address history (last 3 years)', [...applicantPath, 'addressHistory'], [
                   { key: 'address', label: 'Address', options: { required: true } },
-                  { key: 'eircode', label: 'Eircode' },
-                  { key: 'from', label: 'From', options: { type: 'date' } },
-                  { key: 'to', label: 'To', options: { type: 'date' } }
-                ], { itemLabel: 'Address', addLabel: 'Add address history' })}
+                  { key: 'eircode', label: 'Eircode', options: { required: true } },
+                  { key: 'from', label: 'From', options: { type: 'date', required: true } },
+                  { key: 'to', label: 'To', options: { type: 'date', requiredWhen: item => !item.current } }
+                ], {
+                  itemLabel: 'Address',
+                  addLabel: 'Add address history',
+                  currentKey: 'current'
+                })}
                 {index > 0 ? (
                   <button type="button" className="secondary-button mortgage-remove-button" onClick={() => removeApplicant(index)}>
                     Remove applicant
@@ -386,12 +654,17 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                       {renderField('Occupation', [...path, 'occupation'], { required: true })}
                       {renderField('Employment start date', [...path, 'employmentStart'], { type: 'date', required: applicant.employmentCategory === 'Employed' })}
                       {applicant.employmentCategory === 'Employed' ? renderField('Contract type', [...path, 'contractType'], { options: selectOptions.contractType, required: true }) : null}
-                      {renderField('Years with current employer', [...path, 'yearsWithEmployer'], { type: 'number', min: 0, step: 1, required: true })}
-                      {applicant.yearsWithEmployer !== '' && Number(applicant.yearsWithEmployer) < 2 ? renderField('Previous employer', [...path, 'previousEmployer'], { required: true }) : null}
+                      {renderField('Tenure with current employer', [...path, 'yearsWithEmployer'], { type: 'number', min: 0, step: '0.1', unit: 'years', required: true })}
+                      {applicant.yearsWithEmployer !== '' && Number(applicant.yearsWithEmployer) < 2
+                        ? renderField('Previous employer details', [...path, 'previousEmployer'], {
+                          required: true,
+                          help: 'Include the employer name, role and dates.'
+                        })
+                        : null}
                     </>
                   ) : null}
-                  {renderField('Gross basic annual salary', [...path, 'grossAnnualSalary'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: ['Employed', 'Self-employed'].includes(applicant.employmentCategory) })}
-                  {renderField('Net monthly pay', [...path, 'netMonthlyPay'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: ['Employed', 'Self-employed'].includes(applicant.employmentCategory) })}
+                  {renderField('Gross basic annual salary', [...path, 'grossAnnualSalary'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true })}
+                  {renderField('Net monthly pay', [...path, 'netMonthlyPay'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true })}
                   {renderField('Pay frequency', [...path, 'payFrequency'], { options: selectOptions.payFrequency, required: ['Employed', 'Self-employed'].includes(applicant.employmentCategory) })}
                   {renderField('Overtime amount', [...path, 'overtime'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
                   {renderField('Bonus amount', [...path, 'bonus'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
@@ -444,33 +717,33 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                   { key: 'value', label: 'Estimated value', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } }
                 ], { itemLabel: 'Other asset', addLabel: 'Add other asset' })}
                 {renderRepeatGroup('Loans and credit commitments', [...path, 'loans'], [
-                  { key: 'lender', label: 'Lender' },
-                  { key: 'balance', label: 'Outstanding balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-                  { key: 'repayment', label: 'Monthly repayment', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-                  { key: 'monthsRemaining', label: 'Months remaining', options: { type: 'number', min: 0, step: 1 } },
-                  { key: 'refinance', label: 'To be refinanced?', options: { type: 'yesNo' } }
-                ], { itemLabel: 'Loan', addLabel: 'Add loan' })}
+                  { key: 'lender', label: 'Lender', options: { required: true } },
+                  { key: 'balance', label: 'Outstanding balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
+                  { key: 'repayment', label: 'Monthly repayment', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
+                  { key: 'monthsRemaining', label: 'Months remaining', options: { type: 'number', min: 0, step: 1, required: true } },
+                  { key: 'refinance', label: 'To be refinanced?', options: { type: 'yesNo', required: true } }
+                ], { itemLabel: 'Loan', addLabel: 'Add loan', allowEmpty: true })}
                 {renderRepeatGroup('Credit cards', [...path, 'creditCards'], [
-                  { key: 'provider', label: 'Provider' },
-                  { key: 'limit', label: 'Credit limit', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-                  { key: 'balance', label: 'Current balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } }
-                ], { itemLabel: 'Credit card', addLabel: 'Add credit card' })}
+                  { key: 'provider', label: 'Provider', options: { required: true } },
+                  { key: 'limit', label: 'Credit limit', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
+                  { key: 'balance', label: 'Current balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } }
+                ], { itemLabel: 'Credit card', addLabel: 'Add credit card', allowEmpty: true })}
                 <div className="mortgage-form-grid">
-                  {renderField('Maintenance and childcare costs', [...path, 'maintenanceAndChildcare'], { type: 'number', min: 0, step: '0.01', unit: 'EUR / month' })}
+                  {renderField('Maintenance and childcare costs', [...path, 'maintenanceAndChildcare'], { type: 'number', min: 0, step: '0.01', unit: 'EUR / month', required: true })}
                 </div>
               </fieldset>
             );
           })}
           {renderRepeatGroup('Existing properties and mortgages', ['existingProperties'], [
-            { key: 'address', label: 'Property address' },
-            { key: 'mortgageBalance', label: 'Mortgage balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-            { key: 'monthlyRepayment', label: 'Monthly repayment', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-            { key: 'forbearance', label: 'Forbearance arrangements?', options: { type: 'yesNo' } }
-          ], { itemLabel: 'Existing property', addLabel: 'Add existing property' })}
+            { key: 'address', label: 'Property address', options: { required: true } },
+            { key: 'mortgageBalance', label: 'Mortgage balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
+            { key: 'monthlyRepayment', label: 'Monthly repayment', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
+            { key: 'forbearance', label: 'Forbearance arrangements?', options: { type: 'yesNo', required: true } }
+          ], { itemLabel: 'Existing property', addLabel: 'Add existing property', allowEmpty: true })}
           <div className="mortgage-form-grid">
             {renderField('Insolvency or judgements?', ['insolvency'], { type: 'yesNo', required: true })}
             {form.insolvency === 'Yes' ? renderField('Please provide details', ['insolvencyDetails'], { required: true }) : null}
-            {renderField('Expected future changes to finances?', ['futureChanges'], { type: 'yesNo' })}
+            {renderField('Expected future changes to finances?', ['futureChanges'], { type: 'yesNo', required: true })}
           </div>
         </>
       );
@@ -491,7 +764,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
               {renderField('Property type', ['propertyType'], { options: selectOptions.propertyType, required: true })}
               {renderField('New or existing property', ['propertyStatus'], { options: selectOptions.propertyStatus, required: true })}
               {renderField('Year built', ['yearBuilt'], { type: 'number', min: 1700, max: new Date().getFullYear(), step: 1 })}
-              {renderField('BER rating', ['ber'])}
+              {renderField('BER rating', ['ber'], { required: form.propertyStatus === 'Second-hand' })}
               {renderField('Floor area', ['floorArea'], { type: 'number', min: 0, step: '0.1', unit: 'm²' })}
               {renderField('Bedrooms', ['bedrooms'], { type: 'number', min: 0, step: 1 })}
               {renderField('Freehold / leasehold', ['tenure'], { options: selectOptions.tenure })}
@@ -548,17 +821,38 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
       const remaining = outlay - Number(form.loanAmount || 0) - funding;
       return (
         <>
-          <p className="mortgage-step-intro">Enter the purchase costs and explain where the deposit and other funds are coming from.</p>
+          <p className="mortgage-step-intro">
+            {form.propertyFound === 'No'
+              ? 'For an Approval in Principle, enter your estimated target price and deposit. You can update these when you find a property.'
+              : 'Enter the purchase costs and explain where the deposit and other funds are coming from.'}
+          </p>
           <div className="mortgage-form-grid">
-            {renderField('Purchase price / current value', ['purchasePrice'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true })}
-            {renderField('Stamp duty', ['stampDuty'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
+            {renderField(
+              form.propertyFound === 'No' ? 'Estimated purchase price / target budget' : 'Purchase price / current value',
+              ['purchasePrice'],
+              { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true }
+            )}
+            {renderField('Stamp duty (calculated)', ['stampDuty'], {
+              type: 'number',
+              min: 0,
+              step: '0.01',
+              unit: 'EUR',
+              readOnly: true,
+              help: form.applicationType === 'Purchase'
+                ? 'Calculated using Irish residential rates: 1% up to €1m, 2% from €1m to €1.5m, and 6% above €1.5m.'
+                : 'No stamp duty is calculated for this application type.'
+            })}
             {renderField('Legal costs', ['legalCosts'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
             {renderField('Renovation costs', ['renovationCosts'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
           </div>
           {renderRepeatGroup('Sources of funds', ['funds'], [
-            { key: 'source', label: 'Source (savings, gift, inheritance, sale proceeds, Help to Buy)' },
-            { key: 'amount', label: 'Amount', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-            { key: 'donorRelationship', label: 'Donor relationship (if gift)' }
+            { key: 'source', label: 'Source (savings, gift, inheritance, sale proceeds, Help to Buy)', options: { required: true } },
+            { key: 'amount', label: 'Amount', options: { type: 'number', min: 0.01, step: '0.01', unit: 'EUR', required: true } },
+            {
+              key: 'donorRelationship',
+              label: 'Donor relationship (if gift)',
+              options: { requiredWhen: item => (item.source || '').toLowerCase().includes('gift') }
+            }
           ], { itemLabel: 'Source of funds', addLabel: 'Add source of funds' })}
           {form.funds.some(fund => (fund.source || '').toLowerCase().includes('gift')) ? (
             <div className="mortgage-note"><strong>Gift letter required</strong><span>Please include a gift letter in the documents section.</span></div>
@@ -578,27 +872,20 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
 
     return (
       <>
-        <p className="mortgage-step-intro">Add the supporting documents you have available, solicitor details, and required declarations.</p>
+        <p className="mortgage-step-intro">Supporting document uploads are not available yet. You can submit your application now and provide documents later.</p>
         <div className="mortgage-documents">
           {[
-            ['identity', 'ID, proof of address and PPSN proof'],
-            ['income', 'Payslips, salary certificate and Employment Detail Summary'],
-            ['bankStatements', 'Six months of account statements'],
-            ['additional', 'Conditional documents (Forms 11, gift letter, IRP, separation agreement)']
-          ].map(([category, label]) => (
-            <label className="mortgage-upload" key={category}>
+            'Photo ID and proof of address',
+            'PPSN proof',
+            'Payslips',
+            'Six months of account statements',
+            'Salary certificate and Employment Detail Summary',
+            'Conditional documents (Forms 11, gift letter, IRP, separation agreement)'
+          ].map(label => (
+            <div className="mortgage-upload-placeholder" key={label}>
               <span>{label}</span>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={event => handleFiles(category, event)}
-              />
-              <small>PDF or image, up to 15 MB per file</small>
-              {files[category]?.length ? (
-                <ul>{files[category].map(file => <li key={`${file.name}-${file.lastModified}`}>{file.name}</li>)}</ul>
-              ) : null}
-            </label>
+              <small>Document upload will be available later.</small>
+            </div>
           ))}
         </div>
         <fieldset className="mortgage-solicitor">
@@ -635,7 +922,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
       return;
     }
     setFormError('');
-    onSubmit(form, files);
+    onSubmit(form);
   };
 
   return (
@@ -646,35 +933,35 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           <p>Complete each section to send your application for review.</p>
         </div>
       </div>
-      <div className="mortgage-progress" aria-label={`Step ${step + 1} of ${steps.length}`}>
+      <div className="mortgage-progress" aria-label={`Step ${currentStepPosition + 1} of ${visibleStepIndices.length}`}>
         <div className="mortgage-progress-copy">
-          <span>Step {step + 1} of {steps.length}</span>
+          <span>Step {currentStepPosition + 1} of {visibleStepIndices.length}</span>
           <strong>{steps[step].title}</strong>
-          <span>{Math.round(((step + 1) / steps.length) * 100)}% complete</span>
+          <span>{Math.round(((currentStepPosition + 1) / visibleStepIndices.length) * 100)}% complete</span>
         </div>
         <div
           className="mortgage-progress-track"
           role="progressbar"
           aria-label="Application progress"
           aria-valuemin="1"
-          aria-valuemax={steps.length}
-          aria-valuenow={step + 1}
-          aria-valuetext={`Step ${step + 1} of ${steps.length}: ${steps[step].title}`}
+          aria-valuemax={visibleStepIndices.length}
+          aria-valuenow={currentStepPosition + 1}
+          aria-valuetext={`Step ${currentStepPosition + 1} of ${visibleStepIndices.length}: ${steps[step].title}`}
         >
-          <div className="mortgage-progress-fill" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
+          <div className="mortgage-progress-fill" style={{ width: `${((currentStepPosition + 1) / visibleStepIndices.length) * 100}%` }} />
         </div>
         <ol className="mortgage-step-list">
-          {steps.map((item, index) => (
-            <li key={item.title} className={index === step ? 'is-current' : index < step ? 'is-complete' : ''}>
-              <span className="mortgage-step-number">{index < step ? '✓' : index + 1}</span>
-              <span className="mortgage-step-name">{item.title}</span>
+          {visibleStepIndices.map((stepIndex, position) => (
+            <li key={steps[stepIndex].title} className={position === currentStepPosition ? 'is-current' : position < currentStepPosition ? 'is-complete' : ''}>
+              <span className="mortgage-step-number">{position < currentStepPosition ? '✓' : position + 1}</span>
+              <span className="mortgage-step-name">{steps[stepIndex].title}</span>
             </li>
           ))}
         </ol>
       </div>
       <form ref={formRef} onSubmit={handleSubmit} className="mortgage-form" noValidate={false}>
         <div className="mortgage-section-heading">
-          <span>SECTION {step + 1}</span>
+          <span>SECTION {currentStepPosition + 1}</span>
           <h3>{steps[step].title}</h3>
           <p>{steps[step].subtitle}</p>
         </div>
@@ -686,7 +973,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
         <div className="mortgage-form-actions">
           {step > 0 ? <button type="button" className="secondary-button" onClick={previousStep} disabled={submitting}>Back</button> : null}
           <button type="button" className="secondary-button mortgage-cancel-button" onClick={onCancel} disabled={submitting}>Cancel</button>
-          {step < steps.length - 1 ? (
+          {currentStepPosition < visibleStepIndices.length - 1 ? (
             <button type="button" className="primary-button" onClick={nextStep}>Continue</button>
           ) : (
             <button type="submit" className="primary-button" disabled={submitting}>
@@ -694,7 +981,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
             </button>
           )}
         </div>
-        <p className="mortgage-required-note">* Required fields</p>
+        <p className="mortgage-required-note"><span className="mortgage-required-marker">*</span> Required fields</p>
       </form>
     </section>
   );
