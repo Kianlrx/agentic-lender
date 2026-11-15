@@ -1,5 +1,6 @@
 # Reads applications from Firestore and saves assessments back.
-# Web form documents (with applicationData) are mapped in web_form.py; older shapes use FIELD_MAP below.
+# Web form documents (with applicationData) are mapped in web_form.py, mobile app documents in mobile_form.py;
+# older shapes use FIELD_MAP below.
 #
 # Firestore schema:
 # - applications are in the "applications" collection (config.yaml), doc ID = application ID
@@ -19,6 +20,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from al_ai.models import DISCLAIMER, Application, CommitteeResult
+from al_ai.mobile_form import from_mobile, is_mobile
 from al_ai.web_form import from_web_form
 
 # our field -> Firestore field. EDIT THE RIGHT-HAND SIDE.
@@ -61,7 +63,8 @@ FIELD_MAP: dict[str, str] = {
 }
 FULL_NAME_FALLBACK = "personalDetails.fullName"   # used if there's no first name field
 DEBT_FIELDS = {"type": "type", "monthly_repayment": "monthlyRepayment"}  # inside each debt
-LIST_FIELDS = {"loan_type": "applicationData.applicationType", "status": "status"}  # shown by --list
+# shown by --list: mobile app, then web app
+LIST_FIELDS = {"loan_type": ["applicationType", "applicationData.applicationType"], "status": ["status"]}
 # admin risk settings doc -> config.yaml threshold names
 THRESHOLD_MAP = {
     "max_lti_first_time_buyer": "maxLtiFirstTimeBuyer",
@@ -120,6 +123,8 @@ def _set_path(target: dict, dotted: str, value: Any) -> None:
 def to_application(app_id: str, doc: dict, card_pct: float = 0.03) -> Application:
     if isinstance(doc.get("applicationData"), dict):
         return from_web_form(app_id, doc, card_pct)
+    if is_mobile(doc):
+        return from_mobile(app_id, doc, card_pct)
     data: dict = {"application_id": app_id}
     missing: list[str] = []
     for internal, remote in FIELD_MAP.items():
@@ -178,8 +183,8 @@ def print_applications() -> None:
         table.add_column(col)
     for snap in db().collection(coll).limit(100).stream():
         doc = snap.to_dict() or {}
-        table.add_row(snap.id, str(get_path(doc, LIST_FIELDS["loan_type"]) or "—"),
-                      str(get_path(doc, LIST_FIELDS["status"]) or "—"))
+        first = lambda paths: next((get_path(doc, p) for p in paths if get_path(doc, p)), "—")
+        table.add_row(snap.id, str(first(LIST_FIELDS["loan_type"])), str(first(LIST_FIELDS["status"])))
     Console().print(table)
 
 

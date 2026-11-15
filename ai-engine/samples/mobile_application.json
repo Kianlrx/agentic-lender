@@ -1,0 +1,20 @@
+{
+  "_comment": "SYNTHETIC. Same flat shape the mobile app saves to applications/{uid} (Application.kt, mobile-app-sprint2). No BER on mobile, so no valuation and no green discount: APR 365 on the purchase price LTV.",
+  "applicationId": "mobile-sample-001",
+  "firstName": "Sean", "lastName": "Example", "dob": "01/02/1992", "phone": "0870000002",
+  "email": "sean@example.com", "address": "5 Example Street, Cork",
+  "householdStatus": "Renter", "dependants": "0", "isJointApplication": false,
+  "coFirstName": "", "coLastName": "", "coEmail": "", "coPhone": "", "coDob": "",
+  "employerName": "Example Ltd", "jobTitle": "Analyst", "employmentType": "Full-time Employed",
+  "yearsAtEmployer": "4", "grossAnnualIncome": "72000", "additionalIncome": "5000", "netMonthlyIncome": "4300",
+  "creditCardLimit": "3000", "existingLoanRepayment": "200", "rentOrMortgage": "1500", "otherMonthlyCommitments": "0",
+  "depositAmount": "60000", "depositSource": "Personal Savings", "assetsValue": "5000", "primaryBank": "Sample Bank",
+  "applicationType": "Mortgage", "loanAmount": "240000", "loanPurpose": "First-Time Home Purchase",
+  "loanTermYears": "30", "rateType": "Fixed Rate",
+  "existingFirstMortgageBalance": "", "estimatedHomeEquity": "", "requestedCreditLimit": "", "drawPeriodYears": "",
+  "purchasePrice": "300000", "estimatedHomeValue": "300000", "propertyAddress": "8 Sample Avenue, Douglas, Co. Cork",
+  "propertyType": "Semi-Detached", "occupancyType": "Primary Residence",
+  "isApplicationSubmitted": true, "status": "Applied",
+  "consent_dataProcessing": true, "consent_creditCheck": true, "consent_valuation": true,
+  "consent_aiAnalysis": true, "consent_terms": true, "signature": "Sean Example"
+}

@@ -66,6 +66,18 @@ The form does not ask whether the buyer is a **first-time buyer**, so the strict
 limit is used unless they clearly own a home. Adding that question to the form would fix it.
 PPSN, date of birth, email, phone and address are never read.
 
+### What the mobile app gives the engine
+
+The Android app saves flat fields on `applications/{uid}` (mapped in `al_ai/mobile_form.py`):
+`grossAnnualIncome`, card limits (3% a month), `existingLoanRepayment`, `otherMonthlyCommitments`,
+`depositAmount`/`depositSource`, `loanAmount`/`loanTermYears` (or `requestedCreditLimit`/`drawPeriodYears` for a
+HELOC, priced on the combined LTV with `existingFirstMortgageBalance`), `purchasePrice`/`estimatedHomeValue`,
+`propertyType`, `occupancyType`, and `consent_aiAnalysis`. The first-time-buyer status comes from `loanPurpose`.
+
+The mobile app does **not** collect BER, floor area, bedrooms or year built, so mobile applications get no
+valuation (always `REFER`) and no green discount. The APR is priced on the purchase price LTV. Co-applicant
+income and additional bonus income are not counted.
+
 ---
 
 ## Demo commands
@@ -75,6 +87,7 @@ python main.py --sample samples/affordable.json     # BER A2, within limits     
 python main.py --sample samples/borderline.json     # asking price 15% over estimate -> MEDIUM risk, REFER
 python main.py --sample samples/breach.json         # DTI and LTI over limits    -> HIGH risk, DECLINE
 python main.py --sample samples/web_application.json  # web app document: B2 house -> APR 3.40% (green)
+python main.py --sample samples/mobile_application.json  # mobile app document: no BER -> APR 3.65%, REFER
 
 python main.py --sample samples/breach.json --no-llm     # force numbers-only mode
 python main.py --sample samples/affordable.json -v       # also show inputs used + formulas (cross-check)
@@ -224,6 +237,7 @@ al_ai/llm_clients.py    Ollama / Groq / Gemini wrappers, JSON validation + retry
 al_ai/valuation_model.py  scikit-learn pipeline, load_dataset() swap point
 al_ai/firestore_adapter.py  all Firestore access, saving assessments
 al_ai/web_form.py       web app mortgage form -> Application
+al_ai/mobile_form.py    mobile app application -> Application
 al_ai/display.py        rich console output
 ```
 

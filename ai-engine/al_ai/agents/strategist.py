@@ -180,6 +180,10 @@ def price(app: Application, prior: list[AgentOutput], p: dict) -> dict:
     ltv, basis = (val.result.get("ltv"), "valuation LTV") if val else (None, None)
     if ltv is None and app.loan.amount and app.property.asking_price:
         ltv, basis = calc.ltv(app.loan.amount, app.property.asking_price), "purchase price LTV (no valuation)"
+    # HELOC: price on the combined LTV (first mortgage + credit line)
+    balance = app.loan.existing_mortgage_balance
+    if ltv is not None and balance and (app.loan_type or "").lower() == "heloc":
+        ltv, basis = ltv * (app.loan.amount + balance) / app.loan.amount, f"combined {basis} (HELOC)"
     if ltv is None:
         return {"apr_basis_points": None, "apr_pct": None, "ltv_used": None, "ltv_basis": None,
                 "reason": "loan amount or property value missing", "is_estimate": True}

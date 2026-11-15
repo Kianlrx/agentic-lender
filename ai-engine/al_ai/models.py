@@ -54,6 +54,7 @@ class LoanRequest(BaseModel):
     interest_rate_pct: Optional[float] = None
     rate_type: Optional[str] = None            # fixed / variable
     repayment_type: Optional[str] = None
+    existing_mortgage_balance: Optional[float] = None   # HELOC: first mortgage still owed
 
 
 class Property(BaseModel):

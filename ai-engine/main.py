@@ -16,7 +16,7 @@ from al_ai.committee import ConsentError, run_committee
 from al_ai.config import ROOT, load_config, with_threshold_overrides
 from al_ai.llm_clients import LLMRouter
 from al_ai.models import DISCLAIMER, Application
-from al_ai.web_form import from_web_form
+from al_ai.firestore_adapter import to_application
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,15 +32,15 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# engine-shaped JSON, or a web app document (with applicationData)
+# engine-shaped JSON, or a web/mobile app document
 def load_sample(path: str, cfg: dict) -> Application:
     file = Path(path)
     if not file.exists():
         file = ROOT / path
     data = json.loads(file.read_text(encoding="utf-8"))
-    if "applicationData" in data:
-        return from_web_form(data.get("applicationId", file.stem), data, cfg["pricing"]["credit_card_pct_of_limit"])
-    return Application(**data)
+    if "application_id" in data:
+        return Application(**data)
+    return to_application(data.get("applicationId", file.stem), data, cfg["pricing"]["credit_card_pct_of_limit"])
 
 
 def main() -> int:
