@@ -53,15 +53,14 @@ fun ProfileScreen(
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf(currentUser?.email ?: "") }
-    var phone by remember { mutableStateOf("+61 412 345 678") }
-    var dob by remember { mutableStateOf("15/08/2000") }
-    var address by remember { mutableStateOf("MTU, Bishopstown, Cork, Ireland") }
+    var phone by remember { mutableStateOf("") }
+    var dob by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
     var isSaved by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var validationError by remember { mutableStateOf<String?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
 
-    // user profile from Firestore on load
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).get()
@@ -184,7 +183,6 @@ fun ProfileScreen(
                 }
             }
 
-            // Personal Information
             Text(
                 text = "Personal Information",
                 style = MaterialTheme.typography.titleMedium,
@@ -198,14 +196,14 @@ fun ProfileScreen(
                 OutlinedTextField(
                     value = firstName,
                     onValueChange = { firstName = it; isSaved = false; validationError = null },
-                    label = { Text("First Name *") },
+                    label = { Text("First Name") },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = lastName,
                     onValueChange = { lastName = it; isSaved = false; validationError = null },
-                    label = { Text("Last Name *") },
+                    label = { Text("Last Name") },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -214,7 +212,7 @@ fun ProfileScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it; isSaved = false; validationError = null },
-                label = { Text("Email Address *") },
+                label = { Text("Email Address") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -222,7 +220,7 @@ fun ProfileScreen(
             OutlinedTextField(
                 value = phone,
                 onValueChange = { phone = it; isSaved = false; validationError = null },
-                label = { Text("Mobile Number *") },
+                label = { Text("Mobile Number") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -238,7 +236,7 @@ fun ProfileScreen(
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it; isSaved = false; validationError = null },
-                label = { Text("Residential Address") },
+                label = { Text("Home Address") },
                 modifier = Modifier.fillMaxWidth()
             )
 

@@ -38,14 +38,14 @@ fun MainFunction(modifier: Modifier = Modifier) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Show navigation bar on main app screens once logged in
     val authRoutes = listOf(
         Screen.LandingScreen.route,
         Screen.RegisterScreen.route,
         Screen.LoginScreen.route,
         Screen.VerifyEmailScreen.route,
         Screen.ResetPasswordScreen.route,
-        Screen.CreateProfileScreen.route
+        Screen.CreateProfileScreen.route,
+        Screen.SelectApplicationTypeScreen.route
     )
     val showBottomBar = currentRoute != null && currentRoute !in authRoutes
 
@@ -130,8 +130,17 @@ fun MainFunction(modifier: Modifier = Modifier) {
             composable(Screen.CreateProfileScreen.route) {
                 CreateProfileScreen(
                     onProfileCreated = {
-                        navController.navigate(Screen.UserDashboard.route) {
+                        navController.navigate(Screen.SelectApplicationTypeScreen.route) {
                             popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.SelectApplicationTypeScreen.route) {
+                SelectApplicationTypeScreen(
+                    onTypeSelected = {
+                        navController.navigate(Screen.PersonalDetailsScreen.route) {
+                            popUpTo(Screen.UserDashboard.route)
                         }
                     }
                 )
@@ -141,6 +150,11 @@ fun MainFunction(modifier: Modifier = Modifier) {
                     onNavigateToRegister = { navController.navigate(Screen.RegisterScreen.route) },
                     onNavigateToResetPassword = { navController.navigate(Screen.ResetPasswordScreen.route) },
                     onNavigateToVerifyEmail = { navController.navigate(Screen.VerifyEmailScreen.route) },
+                    onNavigateToSelectApplicationType = {
+                        navController.navigate(Screen.SelectApplicationTypeScreen.route) {
+                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
+                        }
+                    },
                     onNavigateToSignIn = { role ->
                         navController.navigate(Screen.UserDashboard.route) {
                             popUpTo(Screen.LandingScreen.route) { inclusive = true }
@@ -151,8 +165,14 @@ fun MainFunction(modifier: Modifier = Modifier) {
             composable(Screen.UserDashboard.route) {
                 UserDashboard(
                     onNavigateToApplication = { navController.navigate(Screen.ApplicationScreen.route) },
+                    onNavigateToStartNewApplication = { navController.navigate(Screen.SelectApplicationTypeScreen.route) },
+                    onNavigateToPersonalDetails = { navController.navigate(Screen.PersonalDetailsScreen.route) },
+                    onNavigateToLoanRequest = { navController.navigate(Screen.LoanRequestScreen.route) },
+                    onNavigateToPropertyDetails = { navController.navigate(Screen.PropertyDetailsScreen.route) },
                     onNavigateToMessages = { navController.navigate(Screen.MessageScreen.route) },
-                    onNavigateToDocuments = { navController.navigate(Screen.DocumentsScreen.route) }
+                    onNavigateToDocuments = { navController.navigate(Screen.DocumentsScreen.route) },
+                    onNavigateToProfile = { navController.navigate(Screen.ProfileScreen.route) },
+                    onNavigateToPayment = { navController.navigate(Screen.PaymentScreen.route) }
                 )
             }
             composable(Screen.ApplicationScreen.route) {
@@ -164,7 +184,8 @@ fun MainFunction(modifier: Modifier = Modifier) {
                     onNavigateToLoanRequest = { navController.navigate(Screen.LoanRequestScreen.route) },
                     onNavigateToPropertyDetails = { navController.navigate(Screen.PropertyDetailsScreen.route) },
                     onNavigateToUpload = { navController.navigate(Screen.DocumentUploadScreen.route) },
-                    onNavigateToConsent = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) }
+                    onNavigateToConsent = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) },
+                    onNavigateToSelectApplicationType = { navController.navigate(Screen.SelectApplicationTypeScreen.route) }
                 )
             }
             composable(Screen.DocumentsScreen.route) { DocumentsScreen() }
@@ -193,18 +214,52 @@ fun MainFunction(modifier: Modifier = Modifier) {
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-            composable(Screen.EmploymentAndIncomeScreen.route) { EmploymentAndIncomeScreen(onNavigateBack = { navController.popBackStack() }) }
-            composable(Screen.DebtsAndCommitmentsScreen.route) { DebtsAndCommitmentsScreen(onNavigateBack = { navController.popBackStack() }) }
-            composable(Screen.DepositAndAssetsScreen.route) { DepositAndAssetsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.EmploymentAndIncomeScreen.route) {
+                EmploymentAndIncomeScreen(
+                    onNavigateNext = { navController.navigate(Screen.DebtsAndCommitmentsScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.DebtsAndCommitmentsScreen.route) {
+                DebtsAndCommitmentsScreen(
+                    onNavigateNext = { navController.navigate(Screen.DepositAndAssetsScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.DepositAndAssetsScreen.route) {
+                DepositAndAssetsScreen(
+                    onNavigateNext = { navController.navigate(Screen.LoanRequestScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             composable(Screen.LoanRequestScreen.route) {
                 LoanRequestScreen(
                     onNavigateNext = { navController.navigate(Screen.PropertyDetailsScreen.route) },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-            composable(Screen.PropertyDetailsScreen.route) { PropertyDetailsScreen(onNavigateBack = { navController.popBackStack() }) }
-            composable(Screen.DocumentUploadScreen.route) { DocumentUploadScreen(onNavigateBack = { navController.popBackStack() }) }
-            composable(Screen.ConsentAndDeclarationsScreen.route) { ConsentAndDeclarationsScreen(onNavigateBack = { navController.popBackStack() }) }
+            composable(Screen.PropertyDetailsScreen.route) {
+                PropertyDetailsScreen(
+                    onNavigateNext = { navController.navigate(Screen.DocumentUploadScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.DocumentUploadScreen.route) {
+                DocumentUploadScreen(
+                    onNavigateNext = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.ConsentAndDeclarationsScreen.route) {
+                ConsentAndDeclarationsScreen(
+                    onSubmitApplication = {
+                        navController.navigate(Screen.UserDashboard.route) {
+                            popUpTo(Screen.UserDashboard.route) { inclusive = true }
+                        }
+                    },
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

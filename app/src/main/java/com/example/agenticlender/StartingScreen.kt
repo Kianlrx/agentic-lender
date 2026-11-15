@@ -1,6 +1,7 @@
 package com.example.agenticlender
 
 import android.util.Patterns
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,12 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +46,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 
 @Composable
 fun LandingScreen(
@@ -108,7 +114,6 @@ fun RegisterScreen(
 ) {
     var firstName by rememberSaveable { mutableStateOf("") }
     var lastName by rememberSaveable { mutableStateOf("") }
-    var phone by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -125,13 +130,13 @@ fun RegisterScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Create an Account",
+            text = "Create Borrower Account",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Get started in just a few minutes",
+            text = "Get started with your loan application",
             style = MaterialTheme.typography.bodyLarge
         )
         Spacer(modifier = Modifier.height(24.dp))
@@ -155,15 +160,6 @@ fun RegisterScreen(
                 modifier = Modifier.weight(1f)
             )
         }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = phone,
-            onValueChange = { phone = it; isDuplicateEmail = false },
-            label = { Text("Mobile Number") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
@@ -227,25 +223,21 @@ fun RegisterScreen(
 
         Button(
             onClick = {
-                // Mandatory fields validation
-                if (firstName.isBlank() || lastName.isBlank() || phone.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
+                if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
                     errorMessage = "Please fill in all mandatory fields."
                     isDuplicateEmail = false
                     return@Button
                 }
-                // Email format check
                 if (!Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
                     errorMessage = "Please enter a valid email address."
                     isDuplicateEmail = false
                     return@Button
                 }
-                // Password rules
                 if (password.length < 6) {
                     errorMessage = "Password must be at least 6 characters long."
                     isDuplicateEmail = false
                     return@Button
                 }
-                // Password match check
                 if (password != confirmPassword) {
                     errorMessage = "Password and confirm password do not match."
                     isDuplicateEmail = false
@@ -260,7 +252,7 @@ fun RegisterScreen(
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             val user = FirebaseAuth.getInstance().currentUser
-                            // user?.sendEmailVerification() //
+                            // user?.sendEmailVerification() // Commented out for  testing
 
                             val userId = user?.uid ?: ""
                             val userMap = hashMapOf(
@@ -268,9 +260,8 @@ fun RegisterScreen(
                                 "lastName" to lastName.trim(),
                                 "fullName" to "${firstName.trim()} ${lastName.trim()}",
                                 "email" to email.trim(),
-                                "phone" to phone.trim(),
                                 "role" to "borrower",
-                                "isEmailVerified" to true, // Set true for testing
+                                "isEmailVerified" to true,
                                 "createdAt" to Timestamp.now()
                             )
                             if (userId.isNotEmpty()) {
@@ -436,10 +427,192 @@ fun VerifyEmailScreen(
 }
 
 @Composable
+fun SelectApplicationTypeScreen(
+    onTypeSelected: () -> Unit = {}
+) {
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val db = FirebaseFirestore.getInstance()
+
+    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(currentUser?.uid) {
+        currentUser?.uid?.let { uid ->
+            db.collection("users").document(uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        val savedType = doc.getString("applicationType")
+                        if (!savedType.isNullOrBlank()) {
+                            selectedType = savedType
+                        }
+                    }
+                }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Select Loan Type",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Please choose the application option you wish to apply for to continue.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Card 1: Mortgage
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (selectedType == "Mortgage") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            ),
+            border = if (selectedType == "Mortgage") BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+            onClick = {
+                selectedType = "Mortgage"
+                errorMessage = null
+            }
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "🏡  Mortgage Loan",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = if (selectedType == "Mortgage") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "For purchasing a new home, moving home, or refinancing an existing mortgage.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (selectedType == "HELOC") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            ),
+            border = if (selectedType == "HELOC") BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+            onClick = {
+                selectedType = "HELOC"
+                errorMessage = null
+            }
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "🏦  Home Equity Line of Credit (HELOC)",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = if (selectedType == "HELOC") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "A revolving line of credit secured against the equity in your home.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (selectedType == null) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MarkEmailRead,
+                        contentDescription = "Prompt",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Please select a loan type above (Mortgage or HELOC) to continue.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Button(
+            onClick = {
+                if (selectedType == null) {
+                    errorMessage = "Please select a loan type above to continue."
+                    return@Button
+                }
+
+                val user = FirebaseAuth.getInstance().currentUser
+                val userId = user?.uid
+                if (userId != null) {
+                    val uniqueAppId = "APP-${System.currentTimeMillis()}"
+                    val now = Timestamp.now()
+
+                    val appRecord = hashMapOf(
+                        "applicationId" to uniqueAppId,
+                        "borrowerUid" to userId,
+                        "borrowerEmail" to (user.email ?: ""),
+                        "applicationType" to selectedType,
+                        "status" to "Draft",
+                        "createdAt" to now,
+                        "updatedAt" to now
+                    )
+
+                    val userRecord = hashMapOf(
+                        "activeApplicationId" to uniqueAppId,
+                        "applicationType" to selectedType,
+                        "applicationStatus" to "Draft",
+                        "applicationTypeSelectedAt" to now
+                    )
+
+                    val db = FirebaseFirestore.getInstance()
+                    db.collection("applications").document(uniqueAppId).set(appRecord, SetOptions.merge())
+                    db.collection("applications").document(userId).set(appRecord, SetOptions.merge())
+                    db.collection("users").document(userId).set(userRecord, SetOptions.merge())
+                }
+                onTypeSelected()
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = selectedType != null
+        ) {
+            Text(text = "Next: Begin Application Form")
+        }
+    }
+}
+
+@Composable
 fun LoginScreen(
     onNavigateToRegister: () -> Unit = {},
     onNavigateToResetPassword: () -> Unit = {},
     onNavigateToVerifyEmail: () -> Unit = {},
+    onNavigateToSelectApplicationType: () -> Unit = {},
     onNavigateToSignIn: (String) -> Unit = {}
 ) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -519,12 +692,16 @@ fun LoginScreen(
                             val user = auth.currentUser
                             val uid = user?.uid ?: ""
 
-                            // Get role from Firestore
                             FirebaseFirestore.getInstance().collection("users").document(uid).get()
                                 .addOnSuccessListener { doc ->
                                     isLoading = false
-                                    val role = doc.getString("role") ?: "borrower"
-                                    onNavigateToSignIn(role)
+                                    val appType = doc.getString("applicationType")
+                                    if (appType.isNullOrBlank()) {
+                                        onNavigateToSelectApplicationType()
+                                    } else {
+                                        val role = doc.getString("role") ?: "borrower"
+                                        onNavigateToSignIn(role)
+                                    }
                                 }
                                 .addOnFailureListener {
                                     isLoading = false
@@ -597,7 +774,7 @@ fun ResetPasswordScreen(
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Email Address *") },
+            label = { Text("Email Address") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )

@@ -1,11 +1,31 @@
 package com.example.agenticlender
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -13,6 +33,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateProfileScreen(
     onProfileCreated: () -> Unit = {}
@@ -21,8 +42,19 @@ fun CreateProfileScreen(
     var dob by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
     var employmentStatus by rememberSaveable { mutableStateOf("") }
+    var isDropdownExpanded by remember { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
+
+    val employmentOptions = listOf(
+        "Full-time Employed",
+        "Part-time Employed",
+        "Self-employed",
+        "Contractor / Temporary",
+        "Retired",
+        "Unemployed",
+        "Other"
+    )
 
     Column(
         modifier = Modifier
@@ -65,19 +97,44 @@ fun CreateProfileScreen(
         OutlinedTextField(
             value = address,
             onValueChange = { address = it },
-            label = { Text("Residential Address") },
+            label = { Text("Home Address") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
-            value = employmentStatus,
-            onValueChange = { employmentStatus = it },
-            label = { Text("Employment Status (e.g. Full-time, Self-employed)") },
-            singleLine = true,
+        ExposedDropdownMenuBox(
+            expanded = isDropdownExpanded,
+            onExpandedChange = { isDropdownExpanded = !isDropdownExpanded },
             modifier = Modifier.fillMaxWidth()
-        )
+        ) {
+            OutlinedTextField(
+                value = employmentStatus,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Employment Status") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = isDropdownExpanded,
+                onDismissRequest = { isDropdownExpanded = false }
+            ) {
+                employmentOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(text = option) },
+                        onClick = {
+                            employmentStatus = option
+                            isDropdownExpanded = false
+                        }
+                    )
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         if (errorMessage != null) {
@@ -91,6 +148,11 @@ fun CreateProfileScreen(
 
         Button(
             onClick = {
+                if (employmentStatus.isBlank()) {
+                    errorMessage = "Please select an employment status from the list."
+                    return@Button
+                }
+
                 isLoading = true
                 errorMessage = null
                 val userId = FirebaseAuth.getInstance().currentUser?.uid
@@ -126,7 +188,7 @@ fun CreateProfileScreen(
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.height(20.dp))
             } else {
-                Text(text = "Save & Continue to Dashboard")
+                Text(text = "Save & Continue to Selection")
             }
         }
 
