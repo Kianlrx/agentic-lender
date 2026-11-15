@@ -1,12 +1,29 @@
 # Loan-note ledger
 
-Hardhat/Solidity prototype for recording approved loan notes on an EVM chain.
-`LoanNote` stores a loan amount, term, BER rating, APR, and audit hash. Only
-the deploying account can mint. BER A/B ratings get a fixed 0.25 percentage
-point discount from the prototype's 5.00% base APR.
+Hardhat/Solidity prototype for recording approved mortgages on an EVM chain.
+The ledger does no calculations: the AI engine decides the APR (including the
+BER green discount) and the underwriter approves. `LoanNote` then checks the
+record and stores it for good.
 
-This contract is not connected to the web app, mobile app, or AI engine. The
-loan values and audit hash in `mintDemo.js` are synthetic demo data.
+Each loan note stores: application ID, borrower ID, underwriter ID, bank,
+property ID (Eircode), loan amount, term, APR (basis points), BER rating, the
+AI assessment's SHA-256 audit hash, a timestamp, and whether it is active.
+
+Rules enforced on minting:
+
+- Only the deploying (bank) account can mint or close loans.
+- All IDs, the bank and the audit hash are required.
+- Loan amount above 0, term 1 to 480 months, APR 0.01% to 15%.
+- Anti-fraud: one application can only be minted once, and a property can
+  only have one active loan. Eircodes are compared without spaces and in
+  capitals, so `d02 x285` and `D02X285` are the same property.
+- `closeLoan` frees the property for a new mortgage; the old record stays.
+- `verifyAudit` shows whether an AI assessment matches the recorded hash.
+
+The ledger is not yet called by the web app. `scripts/mintDemo.js` mints
+`samples/approvedApplication.json`, which uses the same field names as the
+web app's Firestore `applications` record plus the AI engine's
+`assessment_hash`. All values in it are synthetic demo data.
 
 ## Requirements
 
@@ -47,5 +64,5 @@ again to reset the demo.
 
 Only the local Hardhat and localhost networks are configured. Add and review
 any external network configuration and deployment key management separately;
-never commit private keys. The contract hardcodes the demo APR and is not a
-production lending or rate-setting mechanism.
+never commit private keys. The contract is not a
+production lending mechanism.
