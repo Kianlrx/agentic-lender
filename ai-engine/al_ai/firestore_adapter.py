@@ -1,8 +1,10 @@
-# Reads applications from Firestore. ALL Firestore field names live in this file.
+# Reads applications from Firestore and saves assessments back.
+# Web form documents (with applicationData) are mapped in web_form.py, mobile app documents in mobile_form.py;
+# older shapes use FIELD_MAP below.
 #
 # Firestore schema:
 # - applications are in the "applications" collection (config.yaml), doc ID = application ID
-# - the web prototype writes flat borrower and loanRequested fields
+# - the web app writes flat borrower/loanRequested fields plus the whole form in applicationData
 # - the remaining underwriting fields use the nested schema described below
 # - "property.berRating" means {"property": {"berRating": ...}}
 # - debts are a list of {type, monthlyRepayment}
@@ -17,7 +19,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from al_ai.models import Application, CommitteeResult
+from al_ai.models import DISCLAIMER, Application, CommitteeResult
+from al_ai.mobile_form import from_mobile, is_mobile
+from al_ai.web_form import from_web_form
 
 # our field -> Firestore field. EDIT THE RIGHT-HAND SIDE.
 FIELD_MAP: dict[str, str] = {
@@ -59,7 +63,8 @@ FIELD_MAP: dict[str, str] = {
 }
 FULL_NAME_FALLBACK = "personalDetails.fullName"   # used if there's no first name field
 DEBT_FIELDS = {"type": "type", "monthly_repayment": "monthlyRepayment"}  # inside each debt
-LIST_FIELDS = {"loan_type": "loanType", "status": "status"}              # shown by --list
+# shown by --list: mobile app, then web app
+LIST_FIELDS = {"loan_type": ["applicationType", "applicationData.applicationType"], "status": ["status"]}
 # admin risk settings doc -> config.yaml threshold names
 THRESHOLD_MAP = {
     "max_lti_first_time_buyer": "maxLtiFirstTimeBuyer",
@@ -82,6 +87,9 @@ class FirestoreError(SystemExit):
 # connects once; firebase reads GOOGLE_APPLICATION_CREDENTIALS itself
 def db():
     global _db
+    if _db is None and os.getenv("FIRESTORE_EMULATOR_HOST"):
+        from google.cloud import firestore   # local emulator: the client needs no credentials
+        _db = firestore.Client()
     if _db is None:
         path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if not path or not os.path.exists(path):
@@ -112,7 +120,11 @@ def _set_path(target: dict, dotted: str, value: Any) -> None:
 
 
 # Firestore doc -> Application; missing or bad fields are listed, never crash
-def to_application(app_id: str, doc: dict) -> Application:
+def to_application(app_id: str, doc: dict, card_pct: float = 0.03) -> Application:
+    if isinstance(doc.get("applicationData"), dict):
+        return from_web_form(app_id, doc, card_pct)
+    if is_mobile(doc):
+        return from_mobile(app_id, doc, card_pct)
     data: dict = {"application_id": app_id}
     missing: list[str] = []
     for internal, remote in FIELD_MAP.items():
@@ -151,13 +163,12 @@ def to_application(app_id: str, doc: dict) -> Application:
     return app
 
 
-def get_application(app_id: str) -> Application:
-    from al_ai.config import load_config
-    coll = load_config()["firestore"]["applications_collection"]
+def get_application(app_id: str, cfg: dict) -> Application:
+    coll = cfg["firestore"]["applications_collection"]
     snap = db().collection(coll).document(app_id).get()
     if not snap.exists:
         raise FirestoreError(f"No application '{app_id}' in collection '{coll}'. Try: python main.py --list")
-    return to_application(app_id, snap.to_dict() or {})
+    return to_application(app_id, snap.to_dict() or {}, cfg["pricing"]["credit_card_pct_of_limit"])
 
 
 # prints ID, loan type and status only (no personal data)
@@ -172,8 +183,8 @@ def print_applications() -> None:
         table.add_column(col)
     for snap in db().collection(coll).limit(100).stream():
         doc = snap.to_dict() or {}
-        table.add_row(snap.id, str(get_path(doc, LIST_FIELDS["loan_type"]) or "—"),
-                      str(get_path(doc, LIST_FIELDS["status"]) or "—"))
+        first = lambda paths: next((get_path(doc, p) for p in paths if get_path(doc, p)), "—")
+        table.add_row(snap.id, str(first(LIST_FIELDS["loan_type"])), str(first(LIST_FIELDS["status"])))
     Console().print(table)
 
 
@@ -194,17 +205,49 @@ def load_threshold_overrides(cfg: dict) -> dict | None:
     return out
 
 
+# short version on the application itself, read by the web app and the ledger
+def assessment_summary(result: CommitteeResult, assessment_id: str) -> dict:
+    s = result.summary
+    return {"status": "assessed", "assessmentId": assessment_id,
+            "assessment_hash": result.assessment_hash,          # ledger audit hash
+            "aprBasisPoints": s.get("apr_basis_points"),        # ledger APR, 375 = 3.75%
+            "greenDiscountBps": s.get("green_discount_bps"),
+            "greenMortgageEligible": s.get("green_mortgage_eligible"),
+            "recommendation": s.get("recommendation"), "underwriterOption": s.get("underwriter_option"),
+            "riskRating": s.get("risk_rating"), "dti": s.get("dti"), "lti": s.get("lti"), "ltv": s.get("ltv"),
+            "disclaimer": DISCLAIMER, "generatedAt": result.generated_at}
+
+
+# full result in the subcollection + summary on the application, in one batch
+def save_assessment(app_id: str, result: CommitteeResult, cfg: dict) -> str:
+    from google.cloud import firestore
+    app_ref = db().collection(cfg["firestore"]["applications_collection"]).document(app_id)
+    assessment_id = result.generated_at.replace(":", "-")
+    batch = db().batch()
+    batch.set(app_ref.collection(cfg["firestore"]["assessments_subcollection"]).document(assessment_id),
+              result.model_dump())
+    batch.update(app_ref, {"aiAssessment": assessment_summary(result, assessment_id)
+                           | {"assessedAt": firestore.SERVER_TIMESTAMP}})
+    batch.commit()
+    return assessment_id
+
+
+# marks an application that couldn't be assessed, so it isn't retried forever
+def save_status(app_id: str, status: str, reason: str, cfg: dict) -> None:
+    from google.cloud import firestore
+    db().collection(cfg["firestore"]["applications_collection"]).document(app_id).update(
+        {"aiAssessment": {"status": status, "reason": reason, "disclaimer": DISCLAIMER,
+                          "assessedAt": firestore.SERVER_TIMESTAMP}})
+
+
 # shows exactly what will be saved, asks y/N, then saves it
 def write_back(app_id: str, result: CommitteeResult, cfg: dict) -> bool:
-    coll = cfg["firestore"]["applications_collection"]
-    sub = cfg["firestore"]["assessments_subcollection"]
-    doc_id = result.generated_at.replace(":", "-")
     payload = result.model_dump()
-    print(f"\nAbout to write to Firestore: {coll}/{app_id}/{sub}/{doc_id}\n")
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(f"\nAbout to write to Firestore: {cfg['firestore']['applications_collection']}/{app_id}\n")
+    print(json.dumps({"aiAssessment": assessment_summary(result, "<generated_at>"),
+                      cfg["firestore"]["assessments_subcollection"]: payload}, indent=2, ensure_ascii=False))
     if input("\nWrite this to Firestore? [y/N] ").strip().lower() != "y":
         print("Not written.")
         return False
-    db().collection(coll).document(app_id).collection(sub).document(doc_id).set(payload)
-    print(f"Written: {coll}/{app_id}/{sub}/{doc_id}")
+    print(f"Written: assessment {save_assessment(app_id, result, cfg)}")
     return True

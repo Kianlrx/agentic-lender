@@ -26,6 +26,11 @@ class ValuationAgent(Agent):
     def run(self, app: Application, prior: list[AgentOutput], ctx: Context) -> AgentOutput:
         t = ctx.config["thresholds"]
         prop = app.property.model_dump()
+        assumed = []
+        # the web form doesn't ask for bathrooms: 1 keeps the estimate on the low side
+        if prop["bathrooms"] is None:
+            prop["bathrooms"] = 1
+            assumed.append("Bathrooms not provided: assumed 1 (keeps the estimate low)")
         inputs_used = {f"property.{k}": v for k, v in prop.items()} | {"loan.amount": app.loan.amount}
 
         # missing details: no valuation, no LTV (SCRUM-152)
@@ -48,7 +53,7 @@ class ValuationAgent(Agent):
                                reasoning="Valuation model file not found.")
 
         meta = bundle["metadata"]
-        warnings: list[str] = []
+        warnings: list[str] = assumed
         if meta.get("synthetic"):
             warnings.append("Model trained on SYNTHETIC data: estimate is for demo purposes only")
         if prop["county"] not in meta.get("counties", [prop["county"]]):

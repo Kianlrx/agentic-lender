@@ -52,9 +52,10 @@ this folder. The current client queries do not require composite indexes.
   granted by these rules.
 
 The mortgage form collects AI-analysis consent and income, debt, deposit,
-property, and other details. The current form's responses are stored under
-`applicationData`; they are not yet normalized into the AI engine's expected
-schema. The AI engine intentionally refuses to analyze a record without
+property, and other details under `applicationData`. The AI engine maps these
+(`ai-engine/al_ai/web_form.py`) and, through the Admin SDK, adds an
+`aiAssessment` summary to the application. Client rules don't let users change
+that field. The engine refuses to analyze a record without
 `consent.aiAnalysis == true`; see [the AI engine README](../ai-engine/README.md).
 
 ## Security limitations

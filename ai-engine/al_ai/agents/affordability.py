@@ -46,7 +46,7 @@ class AffordabilityAgent(Agent):
         rate = loan.interest_rate_pct
         if rate is None:
             rate = a["default_interest_rate_pct"]
-            defaulted.append(f"interest rate defaulted to {rate}%")
+            defaulted.append(f"no rate on the application: repayments tested at {rate}% (above the rate card)")
         term = loan.term_years
         if term is None:
             term = a["default_term_years"]

@@ -1,0 +1,73 @@
+{
+  "_comment": "SYNTHETIC. Same shape the web app saves to applications/{id} (App.jsx handleMortgageSubmit). Joint, B2 house in Galway: expect LOW risk and a 3.40% APR (365 - 25 green).",
+  "applicationId": "web-sample-001",
+  "borrower": "Niamh Example",
+  "applicantEmail": "niamh@example.com",
+  "phone": "0870000000",
+  "location": "H91 X2Y3",
+  "loanRequested": "300000",
+  "status": "Applied",
+  "createdBy": "demo-borrower-uid",
+  "consent": { "aiAnalysis": true },
+  "documents": [],
+  "applicationData": {
+    "applicationType": "Purchase",
+    "applicationKind": "Joint applicants",
+    "propertyFound": "Yes",
+    "applicants": [
+      {
+        "legalName": "Niamh Example", "previousName": "", "dateOfBirth": "1994-03-02", "gender": "",
+        "ppsn": "0000000TW", "maritalStatus": "Married", "nationality": "Irish", "residency": "Irish citizen",
+        "yearsInIreland": "31", "nonEea": "No", "visaType": "", "visaExpiry": "",
+        "email": "niamh@example.com", "phone": "0870000000",
+        "addressHistory": [{ "address": "1 Sample Road, Galway", "eircode": "H91 A1B2", "from": "2021-01-01", "to": "", "current": true }],
+        "dependantsCount": "1", "dependantAges": "3", "accommodation": "Renting", "monthlyRent": "1600",
+        "employmentCategory": "Employed", "employer": "Sample Ltd", "occupation": "Engineer",
+        "employmentStart": "2019-05-01", "contractType": "Permanent", "yearsWithEmployer": "6.5", "previousEmployer": "",
+        "grossAnnualSalary": "55000", "netMonthlyPay": "3400", "payFrequency": "Monthly",
+        "overtime": "", "bonus": "3000", "commission": "", "variablePayRegularity": "Regular",
+        "otherIncome": [{ "source": "", "amount": "", "duration": "" }],
+        "incomeCurrency": "EUR", "otherCurrency": "",
+        "businessName": "", "ownershipPercentage": "", "netProfitYear1": "", "netProfitYear2": "", "accountant": "",
+        "bankAccounts": [{ "provider": "Sample Bank", "balance": "50000", "monthlySaving": "900", "source": "Salary" }],
+        "otherAssets": [{ "description": "", "value": "" }],
+        "loans": [{ "lender": "Car Finance Co", "balance": "8000", "repayment": "250", "monthsRemaining": "32", "refinance": "No" }],
+        "creditCards": [{ "provider": "Sample Bank", "limit": "2000", "balance": "300" }],
+        "maintenanceAndChildcare": "400"
+      },
+      {
+        "legalName": "Cormac Example", "previousName": "", "dateOfBirth": "1993-07-11", "gender": "",
+        "ppsn": "0000000TX", "maritalStatus": "Married", "nationality": "Irish", "residency": "Irish citizen",
+        "yearsInIreland": "32", "nonEea": "No", "visaType": "", "visaExpiry": "",
+        "email": "cormac@example.com", "phone": "0870000001",
+        "addressHistory": [{ "address": "1 Sample Road, Galway", "eircode": "H91 A1B2", "from": "2021-01-01", "to": "", "current": true }],
+        "dependantsCount": "1", "dependantAges": "3", "accommodation": "Renting", "monthlyRent": "1600",
+        "employmentCategory": "Employed", "employer": "Example Hospital", "occupation": "Nurse",
+        "employmentStart": "2018-09-01", "contractType": "Permanent", "yearsWithEmployer": "7", "previousEmployer": "",
+        "grossAnnualSalary": "45000", "netMonthlyPay": "2900", "payFrequency": "Fortnightly",
+        "overtime": "4000", "bonus": "", "commission": "", "variablePayRegularity": "Occasional",
+        "otherIncome": [{ "source": "", "amount": "", "duration": "" }],
+        "incomeCurrency": "EUR", "otherCurrency": "",
+        "businessName": "", "ownershipPercentage": "", "netProfitYear1": "", "netProfitYear2": "", "accountant": "",
+        "bankAccounts": [{ "provider": "Sample Bank", "balance": "16300", "monthlySaving": "500", "source": "Salary" }],
+        "otherAssets": [{ "description": "", "value": "" }],
+        "loans": [], "creditCards": [], "maintenanceAndChildcare": "0"
+      }
+    ],
+    "existingProperties": [],
+    "insolvency": "No", "insolvencyDetails": "", "futureChanges": "No",
+    "propertyAddress": "12 Example Park, Knocknacarra, Co. Galway", "eircode": "H91 X2Y3",
+    "propertyType": "House", "propertyStatus": "Second-hand", "yearBuilt": "2005", "ber": "B2",
+    "floorArea": "115", "bedrooms": "3", "tenure": "Freehold", "propertyUse": "Home to live in",
+    "otherOccupants": "", "siteValue": "", "buildCost": "", "stagePayments": "", "expectedRent": "",
+    "loanAmount": "300000", "loanTermYears": "30", "rateType": "Fixed", "fixedTermYears": "4",
+    "repaymentType": "Principal and interest",
+    "purchasePrice": "380000", "stampDuty": 3800, "legalCosts": "2500", "renovationCosts": "",
+    "funds": [
+      { "source": "Savings", "amount": "66300", "donorRelationship": "" },
+      { "source": "Gift", "amount": "20000", "donorRelationship": "Parents" }
+    ],
+    "solicitorName": "", "solicitorFirm": "", "solicitorEmail": "", "solicitorPhone": "",
+    "declarations": { "accurate": true, "creditCheck": true, "dataProcessing": true, "aiAnalysis": true }
+  }
+}

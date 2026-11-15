@@ -54,6 +54,7 @@ class LoanRequest(BaseModel):
     interest_rate_pct: Optional[float] = None
     rate_type: Optional[str] = None            # fixed / variable
     repayment_type: Optional[str] = None
+    existing_mortgage_balance: Optional[float] = None   # HELOC: first mortgage still owed
 
 
 class Property(BaseModel):
@@ -81,6 +82,8 @@ class Application(BaseModel):
     loan: LoanRequest = Field(default_factory=LoanRequest)
     property: Property = Field(default_factory=Property)
     missing_fields: list[str] = Field(default_factory=list)   # set by the Firestore adapter
+    notes: list[str] = Field(default_factory=list)            # assumptions made while mapping the form
+    flags: list[str] = Field(default_factory=list)            # declarations a human must review
 
 
 # --- agent output ---

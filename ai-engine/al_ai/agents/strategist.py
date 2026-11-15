@@ -6,16 +6,14 @@ from __future__ import annotations
 import json
 from collections import Counter
 
+from al_ai import calculations as calc
 from al_ai.agents.base import SYSTEM_RULES, Agent, Context
 from al_ai.models import AgentOutput, Application
-from al_ai.valuation_model import BER_ORDER
 
 RECOMMENDATIONS = ["APPROVE", "APPROVE_WITH_CONDITIONS", "REFER", "DECLINE"]
 # matching underwriter options in AL-Web (SCRUM-186)
 UNDERWRITER_OPTION = {"APPROVE": "Approve", "APPROVE_WITH_CONDITIONS": "Conditionally Approve",
                       "REFER": "Request Further Information", "DECLINE": "Decline"}
-GREEN_BER = set(BER_ORDER[:6])          # A1-B3
-GREEN_DISCOUNT_PCT = 0.25
 
 
 # checks an LLM vote has the right fields and values
@@ -53,7 +51,7 @@ def rules_vote(app: Application, prior: list[AgentOutput]) -> dict:
 
     if disposable is not None and disposable < 0:
         reasons.append("Disposable income is negative after the new repayment")
-    reasons += breaches
+    reasons += breaches + app.flags
     if over_capacity:
         reasons.append("Loan is above the estimated borrowing capacity")
     if unavailable:
@@ -62,7 +60,7 @@ def rules_vote(app: Application, prior: list[AgentOutput]) -> dict:
     # never DECLINE when data is missing, send it to a human instead
     if ((disposable is not None and disposable < 0) or len(core) >= 2) and not unavailable:
         rec = "DECLINE"
-    elif breaches or over_capacity or unavailable:
+    elif breaches or over_capacity or unavailable or app.flags:
         rec = "REFER"
     else:
         # small issues become conditions
@@ -88,9 +86,13 @@ def rules_vote(app: Application, prior: list[AgentOutput]) -> dict:
 
 
 # what the LLMs see: figures and warnings only, no personal data
-def facts_for_llm(app: Application, prior: list[AgentOutput]) -> dict:
-    facts = {"loan_type": app.loan_type, "loan_amount": app.loan.amount, "term_years": app.loan.term_years,
-             "first_time_buyer": app.borrower.first_time_buyer, "dependants": app.borrower.dependants}
+def facts_for_llm(app: Application, prior: list[AgentOutput], pricing: dict | None = None) -> dict:
+    facts = {"proposed_apr_pct": (pricing or {}).get("apr_pct"),
+             "apr_note": "The APR is set by the lender's rate card, not by the applicant; affordability was "
+                         "tested at a higher default rate plus a stress buffer",
+             "loan_type": app.loan_type, "loan_amount": app.loan.amount, "term_years": app.loan.term_years,
+             "first_time_buyer": app.borrower.first_time_buyer, "dependants": app.borrower.dependants,
+             "declared_red_flags": app.flags}
     keep = {"Affordability Agent": ["gross_yearly_income", "monthly_repayment", "monthly_repayment_stressed", "dti",
                                     "dti_stressed", "lti", "disposable_income_monthly",
                                     "disposable_income_monthly_stressed", "borrowing_capacity_estimate"],
@@ -123,8 +125,9 @@ class StrategistAgent(Agent):
 
     def run(self, app: Application, prior: list[AgentOutput], ctx: Context) -> AgentOutput:
         # collect votes: Python rules first, then each LLM
+        pricing = price(app, prior, ctx.config["pricing"])
         votes = [{"model": "python-rules", "status": "OK", **rules_vote(app, prior)}]
-        prompt = VOTE_PROMPT.format(facts=json.dumps(facts_for_llm(app, prior), indent=1, default=str),
+        prompt = VOTE_PROMPT.format(facts=json.dumps(facts_for_llm(app, prior, pricing), indent=1, default=str),
                                     thresholds=json.dumps(ctx.config["thresholds"]))
         for provider, model in ctx.llm.active:
             vote, reply = ctx.llm.ask_json(provider, model, SYSTEM_RULES, prompt, validate_vote)
@@ -139,17 +142,21 @@ class StrategistAgent(Agent):
 
         consensus = combine(votes)
 
-        # green mortgage: BER A1-B3 gets 0.25% off (the smart contract applies it)
+        p = ctx.config["pricing"]
         ber = (app.property.ber_rating or "").strip().upper()
+        green_ber = [b.upper() for b in p["green_ber"]]
+        discount = p["green_discount_bps"]
         green = {"ber_rating": ber or None,
-                 "eligible": ber in GREEN_BER if ber else None,
-                 "discount_apr_pct": GREEN_DISCOUNT_PCT if ber in GREEN_BER else 0.0,
-                 "note": ("Qualifies for the Green Mortgage 0.25% APR discount (applied by the smart contract at "
-                          "minting)" if ber in GREEN_BER else
+                 "eligible": ber in green_ber if ber else None,
+                 "discount_bps": discount if ber in green_ber else 0,
+                 "note": (f"Qualifies for the Green Mortgage {discount / 100:.2f}% APR discount (included in the APR)"
+                          if ber in green_ber else
                           "BER unknown: eligibility cannot be checked" if not ber else
-                          f"BER {ber} does not qualify (A1-B3 required)")}
+                          f"BER {ber} does not qualify ({green_ber[0]}-{green_ber[-1]} required)")}
 
         warnings = []
+        if pricing["apr_basis_points"] is None:
+            warnings.append(f"No APR: {pricing['reason']}")
         if consensus["disagreement"]:
             warnings.append("Models disagree: referred for human review")
         llm_votes = [v for v in votes if v["model"] != "python-rules" and v["status"] == "OK"]
@@ -160,11 +167,31 @@ class StrategistAgent(Agent):
         reasoning = "; ".join(consensus["key_reasons"]) or "No issues found."
         return AgentOutput(
             agent=self.name, status="OK" if llm_votes and not consensus["disagreement"] else "WARNING",
-            result={"votes": votes, "consensus": consensus, "green_mortgage": green},
+            result={"votes": votes, "consensus": consensus, "green_mortgage": green, "pricing": pricing},
             confidence=consensus["confidence"],
             inputs_used={"agents": [f"{o.agent}: {o.status}" for o in prior], "property.ber_rating": ber or None},
             warnings=warnings, reasoning=reasoning,
             model=", ".join(v["model"] for v in votes if v["status"] == "OK"))
+
+
+# proposed APR: rate card on the valuation LTV (or the purchase price if there's no valuation)
+def price(app: Application, prior: list[AgentOutput], p: dict) -> dict:
+    val = next((o for o in prior if o.agent == "Valuation Agent"), None)
+    ltv, basis = (val.result.get("ltv"), "valuation LTV") if val else (None, None)
+    if ltv is None and app.loan.amount and app.property.asking_price:
+        ltv, basis = calc.ltv(app.loan.amount, app.property.asking_price), "purchase price LTV (no valuation)"
+    # HELOC: price on the combined LTV (first mortgage + credit line)
+    balance = app.loan.existing_mortgage_balance
+    if ltv is not None and balance and (app.loan_type or "").lower() == "heloc":
+        ltv, basis = ltv * (app.loan.amount + balance) / app.loan.amount, f"combined {basis} (HELOC)"
+    if ltv is None:
+        return {"apr_basis_points": None, "apr_pct": None, "ltv_used": None, "ltv_basis": None,
+                "reason": "loan amount or property value missing", "is_estimate": True}
+    out = calc.price_apr(ltv, app.property.ber_rating, p["apr_bps_by_ltv"], [b.upper() for b in p["green_ber"]],
+                         p["green_discount_bps"])
+    bps = out["apr_basis_points"]
+    return {**out, "apr_pct": bps / 100 if bps is not None else None, "ltv_used": round(ltv, 4),
+            "ltv_basis": basis, "is_estimate": True}
 
 
 # combines the votes: all agree -> that answer, otherwise REFER

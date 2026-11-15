@@ -3,7 +3,8 @@
 The AI part of **Agentic Lender (AL)**, an Irish mortgage / HELOC lending platform (3rd-year group project).
 
 A standalone console app that reads one loan application (a local sample file or Firestore) and runs an
-"AI committee" of four agents on it, printing every step.
+"AI committee" of four agents on it, printing every step. `watch.py` does the same automatically for every
+application submitted through the web app, and saves the result, including the proposed **APR**, to Firestore.
 
 > **AI recommendation only. Estimates, not a lending decision. Final decision is made by a human underwriter.**
 
@@ -45,13 +46,37 @@ warnings to LLMs, never names or other personal data.
 1. Firebase console > Project settings > Service accounts > **Generate new private key**.
 2. Save the JSON **outside the repo** (or name it `*service-account*.json`, which is gitignored).
 3. In `.env`: `GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json`
-4. The adapter maps the current web prototype's flat `borrower` and
-   `loanRequested` values, plus optional underwriting fields when supplied in
-   the nested schema in `al_ai/firestore_adapter.py`. The current web form does
-   not collect explicit `consent.aiAnalysis`, income, debts, deposit, or
-   property details. The engine refuses to run without consent and will flag
-   other missing inputs; web-created records are not ready for a meaningful
-   assessment.
+4. Web app applications (the mortgage form saved under `applicationData`) are mapped by
+   `al_ai/web_form.py`. Every assumption it makes is listed in the result's `notes`, for example
+   "Property type 'House' valued as semi-detached".
+
+### What the web form gives the engine
+
+| Engine input | From the web form | Notes |
+|---|---|---|
+| income | applicant 1 `grossAnnualSalary` (+ overtime/bonus/commission if `Regular`) | non-EUR income is not counted |
+| co-applicant income | applicant 2, same rule | |
+| debts (monthly) | `loans[].repayment`, 3% of each credit card `limit`, `maintenanceAndChildcare`, existing mortgage repayments | refinanced loans and the mortgage being switched are left out |
+| deposit | `purchasePrice - loanAmount`; gifts from `funds` with "gift" in the source | |
+| property | `propertyType`, `floorArea`, `bedrooms`, `yearBuilt`, `ber`; county from `propertyAddress` or a Dublin Eircode | no bathrooms on the form: 1 assumed (keeps the value low) |
+| consent | `consent.aiAnalysis` | no consent, no assessment |
+| red flags | `insolvency`, forbearance, buy-to-let / holiday home, self-build | always sent to a human (`REFER`) |
+
+The form does not ask whether the buyer is a **first-time buyer**, so the stricter second-time-buyer LTI
+limit is used unless they clearly own a home. Adding that question to the form would fix it.
+PPSN, date of birth, email, phone and address are never read.
+
+### What the mobile app gives the engine
+
+The Android app saves flat fields on `applications/{uid}` (mapped in `al_ai/mobile_form.py`):
+`grossAnnualIncome`, card limits (3% a month), `existingLoanRepayment`, `otherMonthlyCommitments`,
+`depositAmount`/`depositSource`, `loanAmount`/`loanTermYears` (or `requestedCreditLimit`/`drawPeriodYears` for a
+HELOC, priced on the combined LTV with `existingFirstMortgageBalance`), `purchasePrice`/`estimatedHomeValue`,
+`propertyType`, `occupancyType`, and `consent_aiAnalysis`. The first-time-buyer status comes from `loanPurpose`.
+
+The mobile app does **not** collect BER, floor area, bedrooms or year built, so mobile applications get no
+valuation (always `REFER`) and no green discount. The APR is priced on the purchase price LTV. Co-applicant
+income and additional bonus income are not counted.
 
 ---
 
@@ -61,6 +86,8 @@ warnings to LLMs, never names or other personal data.
 python main.py --sample samples/affordable.json     # BER A2, within limits      -> LOW risk, APPROVE
 python main.py --sample samples/borderline.json     # asking price 15% over estimate -> MEDIUM risk, REFER
 python main.py --sample samples/breach.json         # DTI and LTI over limits    -> HIGH risk, DECLINE
+python main.py --sample samples/web_application.json  # web app document: B2 house -> APR 3.40% (green)
+python main.py --sample samples/mobile_application.json  # mobile app document: no BER -> APR 3.65%, REFER
 
 python main.py --sample samples/breach.json --no-llm     # force numbers-only mode
 python main.py --sample samples/affordable.json -v       # also show inputs used + formulas (cross-check)
@@ -69,7 +96,13 @@ python main.py --sample samples/affordable.json --json   # full structured resul
 python main.py --list                                     # application IDs, loan type, status
 python main.py --firestore <applicationId>
 python main.py --firestore <applicationId> --write-back   # shows the exact document, asks y/N first
+
+python watch.py            # assess every new submission automatically (Ctrl+C to stop)
+python watch.py --once     # assess applications that are waiting, then stop
 ```
+
+`watch.py` listens to `applications` where `status == "Applied"` (what the web app sets on submit) and
+assesses each one without an `aiAssessment`. Run only one watcher at a time.
 
 The demo works with **no API keys and no Ollama** (numbers-only mode), with **only Ollama**, or with all three LLMs.
 
@@ -113,8 +146,24 @@ LLMs get the finished figures and are told not to recalculate them.
    independently (`APPROVE` / `APPROVE_WITH_CONDITIONS` / `REFER` / `DECLINE`, confidence, reasons,
    conditions). LLM replies must be valid JSON. A bad reply is retried once, then recorded as `ERROR`.
    **If all votes agree, that is the recommendation. Any disagreement or tie becomes `REFER` for human
-   review.** It never declines an incomplete assessment. It also flags **Green Mortgage** eligibility
-   (BER A1–B3 qualifies for the 0.25% APR discount, which the smart contract applies).
+   review.** It never declines an incomplete assessment. It also works out the **proposed APR** (below).
+
+### APR and the Green Mortgage discount
+
+Python sets the APR from the rate card in `config.yaml` (prototype rates, no fees, so APR = interest rate):
+
+| LTV | APR |
+|---|---|
+| up to 60% | 3.45% (345 bps) |
+| up to 80% | 3.65% (365 bps) |
+| up to 90% | 3.85% (385 bps) |
+| above 90% | no APR (outside the rate card) |
+
+BER **A1–B3** takes **25 bps** off (Green Mortgage). Example: 79% LTV, BER B2 → 365 − 25 = **340 = 3.40%**.
+The LTV is the valuation LTV (loan / lower of price and estimate); without a valuation, the purchase price is
+used. The APR is in basis points (`aprBasisPoints`) because the ledger stores whole numbers. It is a
+**proposed** rate: the underwriter confirms it, and it is part of the hashed assessment, so it can't be
+changed later without the hash changing.
 
 Every agent returns the same structure (`al_ai/models.py` → `AgentOutput`), ready for Firestore and the
 AL-Web AI Audit Console:
@@ -140,18 +189,44 @@ borrower's name), so the ledger can detect later changes.
 
 ## Integration boundary
 
-This is a standalone CLI, not an API or a web/mobile service. Firestore access
-uses the Admin SDK service account, not the signed-in browser/mobile user's
-permissions. It reads `applications/{applicationId}`, loads optional settings
-from `settings/riskThresholds`, and writes assessments under
-`applications/{applicationId}/aiAssessments/{assessmentId}` only when
-`--write-back` is explicitly confirmed. The web and mobile applications do
-not currently call the engine or display its results.
+Firestore access uses the Admin SDK service account, not the signed-in browser/mobile user's permissions.
+The engine reads `applications/{applicationId}` and optional `settings/riskThresholds`. When it saves
+(`watch.py`, or `--write-back` after y/N), it writes in one batch:
+
+- `applications/{applicationId}/aiAssessments/{assessmentId}`: the full result (every agent, every vote)
+- `applications/{applicationId}.aiAssessment`: a short summary for the web app and the ledger:
+
+```json
+{ "status": "assessed", "assessmentId": "...", "assessment_hash": "64 hex chars",
+  "aprBasisPoints": 340, "greenDiscountBps": 25, "greenMortgageEligible": true,
+  "recommendation": "APPROVE_WITH_CONDITIONS", "underwriterOption": "Conditionally Approve",
+  "riskRating": "LOW", "dti": 0.25, "lti": 2.84, "ltv": 0.79, "disclaimer": "...", "assessedAt": "..." }
+```
+
+`aprBasisPoints` and `assessment_hash` are the names `ledger/scripts/mintDemo.js` reads. Applications
+without consent get `{"status": "not_assessed"}` and failures get `{"status": "error"}`, so they are not
+retried forever. The engine never changes `status`: approving is the underwriter's job.
+
+### Testing with the Firestore emulator
+
+The end-to-end tests run against the official local emulator (needs Java), so no real data is touched:
+
+```powershell
+# terminal 1, repo root
+npx firebase-tools emulators:start --only firestore --project demo-agentic-lender
+# terminal 2, ai-engine
+$env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"
+$env:GOOGLE_CLOUD_PROJECT = "demo-agentic-lender"
+python -m pytest
+```
+
+Without `FIRESTORE_EMULATOR_HOST` those tests are skipped.
 
 ### Project layout
 
 ```
 main.py                 CLI (argparse)
+watch.py                assesses new Firestore submissions automatically
 train_valuation.py      synthetic data + model training
 config.yaml             thresholds, assumptions, model IDs
 al_ai/calculations.py   pure maths (tested)
@@ -160,7 +235,9 @@ al_ai/agents/           the four agents
 al_ai/committee.py      runs the agents in order; no I/O, so an API can reuse it
 al_ai/llm_clients.py    Ollama / Groq / Gemini wrappers, JSON validation + retry
 al_ai/valuation_model.py  scikit-learn pipeline, load_dataset() swap point
-al_ai/firestore_adapter.py  FIELD_MAP and all Firestore access
+al_ai/firestore_adapter.py  all Firestore access, saving assessments
+al_ai/web_form.py       web app mortgage form -> Application
+al_ai/mobile_form.py    mobile app application -> Application
 al_ai/display.py        rich console output
 ```
 
