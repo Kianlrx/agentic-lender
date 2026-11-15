@@ -1,0 +1,18 @@
+{
+  "applicationId": "demo-app-001",
+  "createdBy": "demo-borrower-uid",
+  "borrower": "Demo Borrower",
+  "status": "Approved",
+  "approvedBy": "demo-underwriter-uid",
+  "bank": "Agentic Lender",
+  "applicationData": {
+    "eircode": "D02 X285",
+    "ber": "B2",
+    "loanAmount": "250000",
+    "loanTermYears": "30"
+  },
+  "aiAssessment": {
+    "aprBasisPoints": 375,
+    "assessment_hash": "9f2c1e5b7a3d4c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60"
+  }
+}
