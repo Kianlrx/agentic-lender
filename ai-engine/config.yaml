@@ -11,12 +11,23 @@ thresholds:
   stress_buffer_pct_points: 2.0     # stress test rate = rate + this
 
 assumptions:
-  default_interest_rate_pct: 4.0    # used when the application gives no rate
+  default_interest_rate_pct: 4.0    # affordability test rate when the application gives none (keep above the rate card)
   default_term_years: 30            # used when the application gives no term
   effective_tax_rate: 0.30          # rough gross -> net for disposable income (prototype)
   living_cost_single: 1200          # monthly, euro (prototype)
   living_cost_couple: 1800
   living_cost_per_dependant: 400
+
+# APR pricing in basis points (375 = 3.75%). Prototype rate card, not real lender rates.
+# no fees are modelled, so APR = the interest rate
+pricing:
+  apr_bps_by_ltv:                   # [max LTV, APR]: first band the LTV fits in
+    - [0.60, 345]
+    - [0.80, 365]
+    - [0.90, 385]
+  green_ber: [A1, A2, A3, B1, B2, B3]
+  green_discount_bps: 25            # Green Mortgage: 0.25% off
+  credit_card_pct_of_limit: 0.03    # monthly commitment counted per credit card
 
 # LLMs, tried in this order
 # a provider with no key or no server is skipped

@@ -16,6 +16,7 @@ from al_ai.committee import ConsentError, run_committee
 from al_ai.config import ROOT, load_config, with_threshold_overrides
 from al_ai.llm_clients import LLMRouter
 from al_ai.models import DISCLAIMER, Application
+from al_ai.web_form import from_web_form
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,11 +32,15 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def load_sample(path: str) -> Application:
+# engine-shaped JSON, or a web app document (with applicationData)
+def load_sample(path: str, cfg: dict) -> Application:
     file = Path(path)
     if not file.exists():
         file = ROOT / path
-    return Application(**json.loads(file.read_text(encoding="utf-8")))
+    data = json.loads(file.read_text(encoding="utf-8"))
+    if "applicationData" in data:
+        return from_web_form(data.get("applicationId", file.stem), data, cfg["pricing"]["credit_card_pct_of_limit"])
+    return Application(**data)
 
 
 def main() -> int:
@@ -50,14 +55,14 @@ def main() -> int:
         if args.list:
             fs.print_applications()
             return 0
-        app = fs.get_application(args.firestore)
+        app = fs.get_application(args.firestore, cfg)
         cfg = with_threshold_overrides(cfg, fs.load_threshold_overrides(cfg), "Firestore risk settings")
     else:
         if args.write_back:
             print("--write-back only works with --firestore")
             return 2
         try:
-            app = load_sample(args.sample)
+            app = load_sample(args.sample, cfg)
         except (OSError, json.JSONDecodeError, ValidationError) as exc:
             print(f"Could not load sample application: {exc}")
             return 2

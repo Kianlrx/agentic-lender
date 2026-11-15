@@ -134,7 +134,15 @@ def strategist_body(out: AgentOutput):
         lines.append("; ".join(cons["conditions"]) + "\n")
     g = r["green_mortgage"]
     lines.append("Green Mortgage: ", style="bold")
-    lines.append(g["note"], style="green" if g["eligible"] else "dim")
+    lines.append(g["note"] + "\n", style="green" if g["eligible"] else "dim")
+    p = r["pricing"]
+    lines.append("Proposed APR (estimate): ", style="bold")
+    if p["apr_basis_points"] is None:
+        lines.append(f"none, {p['reason']}", style="yellow")
+    else:
+        lines.append(f"{p['apr_pct']:.2f}% ({p['apr_basis_points']} bps)", style="bold")
+        lines.append(f" = {p['base_apr_basis_points']} bps for {p['ltv_band']} on {p['ltv_basis']}"
+                     f" - {p['green_discount_bps']} bps green discount", style="dim")
     return Group(votes, lines)
 
 
@@ -175,11 +183,12 @@ def summary(result: CommitteeResult) -> None:
     t.add_row("[bold]Risk rating[/]", f"[{risk_style}]{s['risk_rating']}[/]",
               "[bold]AI recommendation[/]", f"[{VOTE_STYLE.get(s['recommendation'], '')}]{s['recommendation']}[/]")
     t.add_row("[bold]DTI[/]", pct(s["dti"]), "[bold]LTV[/]", pct(s["ltv"]))
+    apr = f"{s['apr_pct']:.2f}% ({s['apr_basis_points']} bps)" if s["apr_basis_points"] is not None else "—"
+    t.add_row("[bold]Proposed APR[/]", apr, "[bold]Green discount[/]", f"{s['green_discount_bps']} bps")
     t.add_row("[bold]Thresholds from[/]", s["thresholds_source"] or "—", "[bold]Assessment hash[/]",
               f"[dim]{result.assessment_hash[:16]}…[/]")
-    for note in s["notes"]:
-        t.add_row("", f"[yellow]{note}[/]", "", "")
-    console.print(Panel(t, title="[bold]Summary[/]", border_style=risk_style))
+    notes = Text("".join(f"• {note}\n" for note in s["notes"]).rstrip(), style="yellow")
+    console.print(Panel(Group(t, notes) if s["notes"] else t, title="[bold]Summary[/]", border_style=risk_style))
 
 
 def footer() -> None:

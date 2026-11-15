@@ -16,11 +16,11 @@ Prototype lending platform split into four independently runnable subsystems:
 - The mobile client saves profiles under `users/{uid}` and messages under
   `chats/{uid}/messages`. The web client stores flat application records in
   `applications`.
-- The web application form only collects contact details and requested amount.
-  The AI engine needs additional underwriting inputs and explicit
-  `consent.aiAnalysis`; it will not assess a web-created record without that
-  consent and data. There is no API or end-to-end hand-off between the AI
-  engine, web/mobile clients, and ledger yet.
+- The AI engine's `watch.py` assesses each submitted web application
+  (`status == "Applied"`, with `consent.aiAnalysis == true`) and saves
+  `aiAssessment` on it, including `aprBasisPoints` and `assessment_hash`, the
+  fields the ledger's mint script reads. The web app does not show the
+  assessment yet, and nothing calls the ledger automatically.
 - The web pipeline is currently shared among all authenticated accounts. The
   accompanying Firestore rules preserve this demo behavior; do not use them
   for real borrower data without adding broker/underwriter roles and narrower

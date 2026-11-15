@@ -114,6 +114,21 @@ def borrowing_capacity(gross_yearly_income: float, monthly_debts: float, deposit
     return {**caps, "estimate": caps[limiting], "limited_by": limiting}
 
 
+# APR in basis points from the LTV rate card, minus the green discount for BER A1-B3
+def price_apr(ltv: float, ber: str | None, bands: list[list[float]], green_ber: list[str],
+              green_discount_bps: int) -> dict:
+    if ltv < 0:
+        raise ValueError("LTV cannot be negative")
+    band = next(((max_ltv, bps) for max_ltv, bps in sorted(bands) if round(ltv, 6) <= max_ltv), None)
+    if band is None:
+        return {"apr_basis_points": None, "base_apr_basis_points": None, "green_discount_bps": 0,
+                "ltv_band": None, "reason": f"LTV {ltv:.1%} is above the rate card (max {max(bands)[0]:.0%})"}
+    green = (ber or "").strip().upper() in green_ber
+    discount = int(green_discount_bps) if green else 0
+    return {"apr_basis_points": int(band[1]) - discount, "base_apr_basis_points": int(band[1]),
+            "green_discount_bps": discount, "ltv_band": f"LTV up to {band[0]:.0%}", "reason": None}
+
+
 @dataclass
 class ThresholdCheck:
     metric: str

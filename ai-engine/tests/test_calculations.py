@@ -172,3 +172,40 @@ def test_threshold_ratio_format():
 
 def test_threshold_decimal_percent_format():
     assert calc.check_threshold("DTI", 0.415, 0.35).message == "DTI 41.5% exceeds limit 35%"
+
+
+# APR pricing
+
+BANDS = [[0.60, 345], [0.80, 365], [0.90, 385]]
+GREEN = ["A1", "A2", "A3", "B1", "B2", "B3"]
+
+
+@pytest.mark.parametrize("ltv, ber, expected", [
+    (0.50, "C1", 345),
+    (0.60, "C1", 345),       # band edge belongs to the lower band
+    (0.601, "C1", 365),
+    (0.79, "B2", 340),       # 365 - 25 green
+    (0.90, "a1", 360),       # case-insensitive BER
+    (0.85, "B3", 360),
+    (0.85, "C1", 385),
+    (0.85, None, 385),       # unknown BER: no discount
+])
+def test_price_apr(ltv, ber, expected):
+    assert calc.price_apr(ltv, ber, BANDS, GREEN, 25)["apr_basis_points"] == expected
+
+
+def test_price_apr_reports_discount():
+    out = calc.price_apr(0.79, "B2", BANDS, GREEN, 25)
+    assert out["base_apr_basis_points"] == 365 and out["green_discount_bps"] == 25
+    assert out["ltv_band"] == "LTV up to 80%"
+
+
+def test_price_apr_above_rate_card():
+    out = calc.price_apr(0.95, "A1", BANDS, GREEN, 25)
+    assert out["apr_basis_points"] is None
+    assert "above the rate card" in out["reason"]
+
+
+def test_price_apr_negative_ltv_raises():
+    with pytest.raises(ValueError):
+        calc.price_apr(-0.1, "A1", BANDS, GREEN, 25)

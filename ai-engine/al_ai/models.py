@@ -81,6 +81,8 @@ class Application(BaseModel):
     loan: LoanRequest = Field(default_factory=LoanRequest)
     property: Property = Field(default_factory=Property)
     missing_fields: list[str] = Field(default_factory=list)   # set by the Firestore adapter
+    notes: list[str] = Field(default_factory=list)            # assumptions made while mapping the form
+    flags: list[str] = Field(default_factory=list)            # declarations a human must review
 
 
 # --- agent output ---

@@ -79,6 +79,8 @@ def build_summary(app: Application, outputs: list[AgentOutput], config: dict) ->
         notes.append("Application is still a Draft")
     if app.missing_fields:
         notes.append(f"{len(app.missing_fields)} application field(s) missing or invalid (see missing_fields)")
+    notes += app.flags + app.notes
+    pricing = strat.get("pricing", {})
     return {
         "dti": aff.get("dti"), "lti": aff.get("lti"), "ltv": val.get("ltv"),
         "estimated_value": val.get("estimated_value"),
@@ -86,6 +88,9 @@ def build_summary(app: Application, outputs: list[AgentOutput], config: dict) ->
         "recommendation": consensus.get("recommendation"),
         "underwriter_option": consensus.get("underwriter_option"),
         "green_mortgage_eligible": strat.get("green_mortgage", {}).get("eligible"),
+        "apr_basis_points": pricing.get("apr_basis_points"),
+        "apr_pct": pricing.get("apr_pct"),
+        "green_discount_bps": pricing.get("green_discount_bps", 0),
         "thresholds_source": config.get("thresholds_source"),
         "notes": notes,
         "missing_fields": app.missing_fields,
