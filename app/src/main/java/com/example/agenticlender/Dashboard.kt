@@ -92,16 +92,16 @@ fun UserDashboard(
     var hasActiveApplication by remember { mutableStateOf(false) }
     var showActiveAppAlert by remember { mutableStateOf(false) }
 
-    var borrowingCapacityText by remember { mutableStateOf("€0") }
-    var monthlyRepaymentText by remember { mutableStateOf("€0 / mo") }
+    var borrowingCapacityText by remember { mutableStateOf("€0.00") }
+    var monthlyRepaymentText by remember { mutableStateOf("€0.00 / mo") }
     var ltiRatioText by remember { mutableStateOf("-") }
     var dtiRatioText by remember { mutableStateOf("-") }
     var ltvRatioText by remember { mutableStateOf("-") }
     var riskLevel by remember { mutableStateOf("Pending Input") }
     var riskColor by remember { mutableStateOf(Color(0xFF757575)) }
 
-    var fairValuationText by remember { mutableStateOf("€0") }
-    var approvalLikelihoodText by remember { mutableStateOf("Pending Application Input") }
+    var fairValuationText by remember { mutableStateOf("€0.00") }
+    var approvalLikelihoodText by remember { mutableStateOf("Pending User Input") }
     var aiExplanationText by remember {
         mutableStateOf(
             "Enter your financial and property details in the application form to compute live AI valuation and approval likelihood."
@@ -153,14 +153,56 @@ fun UserDashboard(
                 if (appDoc.exists()) {
                     hasActiveApplication = true
 
-                    val loanAmtStr = appDoc.getString("loanAmount")
-                        ?: appDoc.getString("requestedCreditLimit")
-                    val priceStr = appDoc.getString("purchasePrice")
-                        ?: appDoc.getString("estimatedHomeValue")
+                    val loanAmtStr = appDoc.getString("loanAmount") ?: appDoc.getString("requestedCreditLimit")
+                    val priceStr = appDoc.getString("purchasePrice") ?: appDoc.getString("estimatedHomeValue")
                     val incomeStr = appDoc.getString("grossAnnualIncome")
-                    val debtStr = appDoc.getString("rentOrMortgage")
-                        ?: appDoc.getString("existingLoanRepayment")
-                    val downPaymentStr = appDoc.getString("downPayment")
+                    val debtStr = appDoc.getString("rentOrMortgage") ?: appDoc.getString("existingLoanRepayment")
+
+                    val loanAmt = loanAmtStr?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull()
+                    val priceVal = priceStr?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull()
+                    val incomeVal = incomeStr?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull()
+                    val debtVal = debtStr?.replace(Regex("[^0-9.]"), "")?.toDoubleOrNull() ?: 0.0
+
+                    if (incomeVal != null && incomeVal > 0) {
+                        val capacity = incomeVal * 4.0
+                        borrowingCapacityText = String.format(java.util.Locale.getDefault(), "€%,.2f", capacity)
+                    } else {
+                        borrowingCapacityText = "€0.00"
+                    }
+
+                    if (loanAmt != null && loanAmt > 0) {
+                        val monthlyEst = (loanAmt / 360.0) * 1.35
+                        monthlyRepaymentText = String.format(java.util.Locale.getDefault(), "€%,.2f / mo", monthlyEst)
+
+                        if (incomeVal != null && incomeVal > 0) {
+                            val lti = loanAmt / incomeVal
+                            ltiRatioText = String.format(java.util.Locale.getDefault(), "%.1fx", lti)
+
+                            val dti = ((debtVal + monthlyEst) / (incomeVal / 12.0)) * 100.0
+                            dtiRatioText = String.format(java.util.Locale.getDefault(), "%.1f%%", dti)
+
+                            if (priceVal != null && priceVal > 0) {
+                                val ltv = (loanAmt / priceVal) * 100.0
+                                ltvRatioText = String.format(java.util.Locale.getDefault(), "%.1f%%", ltv)
+                            }
+                        }
+                    }
+
+                    if (priceVal != null && priceVal > 0) {
+                        fairValuationText = String.format(java.util.Locale.getDefault(), "€%,.2f", priceVal * 0.96)
+                    }
+
+                    val appRef = appDoc.getString("applicationId") ?: "APP-${uid.take(6).uppercase()}"
+                    loanNoteRef = "LOAN-NOTE-$appRef"
+
+                    if (appDoc.getBoolean("isApplicationSubmitted") == true) {
+                        progressVal = 0.85f
+                        if (applicationStatus == AppWorkflowStatus.DRAFT) {
+                            applicationStatus = AppWorkflowStatus.APPLIED
+                        }
+                    } else {
+                        progressVal = 0.35f
+                    }
 
                     db.collection("users")
                         .document(uid)
