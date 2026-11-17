@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +21,6 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -52,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// More options screen
 @Composable
 fun MoreScreen(
     onNavigateToProfile: () -> Unit = {},
@@ -99,12 +99,14 @@ fun MoreScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Page title
         Text(
             text = "More Options",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
         )
 
+        // User profile header card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -161,6 +163,7 @@ fun MoreScreen(
             }
         }
 
+        // Section 1: Account & Finances
         Text(
             text = "Account & Finances",
             style = MaterialTheme.typography.labelLarge,
@@ -191,6 +194,7 @@ fun MoreScreen(
             }
         }
 
+        // Section 2: Help & Preferences
         Text(
             text = "Help & Preferences",
             style = MaterialTheme.typography.labelLarge,
@@ -223,6 +227,7 @@ fun MoreScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Logout button
         OutlinedButton(
             onClick = { showLogoutDialog = true },
             modifier = Modifier.fillMaxWidth(),
@@ -242,6 +247,7 @@ fun MoreScreen(
             )
         }
 
+        // App version footer
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -261,6 +267,7 @@ fun MoreScreen(
         }
     }
 
+    // Logout confirmation dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -286,6 +293,7 @@ fun MoreScreen(
     }
 }
 
+// Menu item row helper
 @Composable
 private fun MoreMenuItem(
     icon: ImageVector,

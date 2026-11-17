@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+// Payment and appraisal fees screen
 @Composable
 fun PaymentScreen(
     onNavigateBack: () -> Unit = {}

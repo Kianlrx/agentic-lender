@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -58,7 +58,9 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.util.Locale
 
+// All possible loan application stages and their badge colors
 enum class AppWorkflowStatus(val label: String, val color: Color) {
     DRAFT("Draft", Color(0xFF757575)),
     APPLIED("Applied", Color(0xFF1E88E5)),
@@ -70,6 +72,7 @@ enum class AppWorkflowStatus(val label: String, val color: Color) {
     DECLINED("Declined", Color(0xFFE53935))
 }
 
+// Borrower dashboard view showing stats, progress, AI valuation, and broker messages
 @Composable
 fun UserDashboard(
     onNavigateToApplication: () -> Unit = {},
@@ -86,6 +89,7 @@ fun UserDashboard(
     val db = remember { FirebaseFirestore.getInstance() }
     val currentUser = auth.currentUser
 
+    // Holds dashboard state variables for numbers and text
     var fetchedName by remember { mutableStateOf("") }
     var applicationType by remember { mutableStateOf("Mortgage") }
     var applicationStatus by remember { mutableStateOf(AppWorkflowStatus.DRAFT) }
@@ -114,9 +118,11 @@ fun UserDashboard(
     var latestMessageText by remember { mutableStateOf("No recent messages from your broker") }
     var unreadMessageCount by remember { mutableStateOf(0) }
 
+    // Fetch user profile and application data from Firestore
     LaunchedEffect(currentUser?.uid) {
         val uid = currentUser?.uid ?: return@LaunchedEffect
 
+        // Fetch user profile info
         db.collection("users").document(uid).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -148,6 +154,7 @@ fun UserDashboard(
                 }
             }
 
+        // Fetch application data and calculate real metrics
         db.collection("applications").document(uid).get()
             .addOnSuccessListener { appDoc ->
                 if (appDoc.exists()) {
@@ -165,31 +172,48 @@ fun UserDashboard(
 
                     if (incomeVal != null && incomeVal > 0) {
                         val capacity = incomeVal * 4.0
-                        borrowingCapacityText = String.format(java.util.Locale.getDefault(), "€%,.2f", capacity)
+                        borrowingCapacityText = String.format(Locale.getDefault(), "€%,.2f", capacity)
                     } else {
                         borrowingCapacityText = "€0.00"
                     }
 
                     if (loanAmt != null && loanAmt > 0) {
                         val monthlyEst = (loanAmt / 360.0) * 1.35
-                        monthlyRepaymentText = String.format(java.util.Locale.getDefault(), "€%,.2f / mo", monthlyEst)
+                        monthlyRepaymentText = String.format(Locale.getDefault(), "€%,.2f / mo", monthlyEst)
 
                         if (incomeVal != null && incomeVal > 0) {
                             val lti = loanAmt / incomeVal
-                            ltiRatioText = String.format(java.util.Locale.getDefault(), "%.1fx", lti)
+                            ltiRatioText = String.format(Locale.getDefault(), "%.1fx", lti)
 
                             val dti = ((debtVal + monthlyEst) / (incomeVal / 12.0)) * 100.0
-                            dtiRatioText = String.format(java.util.Locale.getDefault(), "%.1f%%", dti)
+                            dtiRatioText = String.format(Locale.getDefault(), "%.1f%%", dti)
 
                             if (priceVal != null && priceVal > 0) {
                                 val ltv = (loanAmt / priceVal) * 100.0
-                                ltvRatioText = String.format(java.util.Locale.getDefault(), "%.1f%%", ltv)
+                                ltvRatioText = String.format(Locale.getDefault(), "%.1f%%", ltv)
+
+                                if (ltv <= 80 && lti <= 3.5 && dti <= 35) {
+                                    riskLevel = "Low Risk"
+                                    riskColor = Color(0xFF43A047)
+                                    approvalLikelihoodText = "95% (High Odds)"
+                                    aiExplanationText = "Strong financial profile. Ratios are well within regulatory guidelines."
+                                } else if (ltv <= 90 && lti <= 4.5 && dti <= 45) {
+                                    riskLevel = "Medium Risk"
+                                    riskColor = Color(0xFFFB8C00)
+                                    approvalLikelihoodText = "78% (Moderate Odds)"
+                                    aiExplanationText = "Moderate financial risk profile."
+                                } else {
+                                    riskLevel = "High Risk"
+                                    riskColor = Color(0xFFE53935)
+                                    approvalLikelihoodText = "55% (Requires Co-signer)"
+                                    aiExplanationText = "High loan-to-income or debt-to-income ratio detected."
+                                }
                             }
                         }
                     }
 
                     if (priceVal != null && priceVal > 0) {
-                        fairValuationText = String.format(java.util.Locale.getDefault(), "€%,.2f", priceVal * 0.96)
+                        fairValuationText = String.format(Locale.getDefault(), "€%,.2f", priceVal * 0.96)
                     }
 
                     val appRef = appDoc.getString("applicationId") ?: "APP-${uid.take(6).uppercase()}"
@@ -204,6 +228,7 @@ fun UserDashboard(
                         progressVal = 0.35f
                     }
 
+                    // Check for missing or rejected documents to highlight on dashboard
                     db.collection("users")
                         .document(uid)
                         .collection("documents")
@@ -232,6 +257,7 @@ fun UserDashboard(
                             }
                         }
 
+                    // Fetch latest message snippet from broker
                     db.collection("chats")
                         .document(uid)
                         .collection("messages")
@@ -254,6 +280,7 @@ fun UserDashboard(
 
     val displayName = fetchedName.ifBlank { "User" }
 
+    // Main dashboard scrollable view layout
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -261,6 +288,7 @@ fun UserDashboard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Top greeting header with user avatar and application status badge
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -313,6 +341,7 @@ fun UserDashboard(
             }
         }
 
+        // Active application card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -395,6 +424,7 @@ fun UserDashboard(
             }
         }
 
+        // Financial ratios & risk level
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp)
@@ -515,6 +545,7 @@ fun UserDashboard(
             }
         }
 
+        // AI insights & property valuation
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -561,146 +592,150 @@ fun UserDashboard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(
-                            alpha = 0.25f
-                        )
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = onNavigateToDocuments
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WarningAmber,
-                            contentDescription = "Warning",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(28.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Action Required",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-
-                            Text(
-                                conditionalNotes,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Go",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-
-                Text(
-                    "Application Steps",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+        // Action required banner
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(
+                    alpha = 0.25f
+                )
+            ),
+            shape = RoundedCornerShape(16.dp),
+            onClick = onNavigateToDocuments
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WarningAmber,
+                    contentDescription = "Warning",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(28.dp)
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ShortcutCard(
-                        title = "Personal",
-                        subtitle = "Step 1",
-                        icon = Icons.Default.Person,
-                        onClick = onNavigateToPersonalDetails,
-                        modifier = Modifier.weight(1f)
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Action Required",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
 
-                    ShortcutCard(
-                        title = "Loan & Rate",
-                        subtitle = "Step 2",
-                        icon = Icons.AutoMirrored.Filled.Assignment,
-                        onClick = onNavigateToLoanRequest,
-                        modifier = Modifier.weight(1f)
+                    Text(
+                        conditionalNotes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ShortcutCard(
-                        title = "Property Details",
-                        subtitle = "Step 3",
-                        icon = Icons.Default.HomeWork,
-                        onClick = onNavigateToPropertyDetails,
-                        modifier = Modifier.weight(1f)
-                    )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Go",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
 
-                    ShortcutCard(
-                        title = "Documents",
-                        subtitle = "Step 4",
-                        icon = Icons.Default.Description,
-                        onClick = onNavigateToDocuments,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+        // Application shortcuts
+        Text(
+            "Application Steps",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
 
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = onNavigateToMessages
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "Broker Chat",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ShortcutCard(
+                title = "Personal",
+                subtitle = "Step 1",
+                icon = Icons.Default.Person,
+                onClick = onNavigateToPersonalDetails,
+                modifier = Modifier.weight(1f)
+            )
 
-                                if (unreadMessageCount > 0) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+            ShortcutCard(
+                title = "Loan & Rate",
+                subtitle = "Step 2",
+                icon = Icons.AutoMirrored.Filled.Assignment,
+                onClick = onNavigateToLoanRequest,
+                modifier = Modifier.weight(1f)
+            )
+        }
 
-                                    Badge {
-                                        Text("$unreadMessageCount New")
-                                    }
-                                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ShortcutCard(
+                title = "Property Details",
+                subtitle = "Step 3",
+                icon = Icons.Default.HomeWork,
+                onClick = onNavigateToPropertyDetails,
+                modifier = Modifier.weight(1f)
+            )
+
+            ShortcutCard(
+                title = "Documents",
+                subtitle = "Step 4",
+                icon = Icons.Default.Description,
+                onClick = onNavigateToDocuments,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Broker chat card
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            onClick = onNavigateToMessages
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Broker Chat",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        if (unreadMessageCount > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Badge {
+                                Text("$unreadMessageCount New")
                             }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                latestMessageText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Button(onClick = onNavigateToMessages) {
-                            Text("Chat")
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        latestMessageText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Button(onClick = onNavigateToMessages) {
+                    Text("Chat")
                 }
             }
         }
     }
 
+    // Alert dialog if active application exists when user tries to start a new one
     if (showActiveAppAlert) {
         AlertDialog(
             onDismissRequest = { showActiveAppAlert = false },
@@ -731,6 +766,7 @@ fun UserDashboard(
     }
 }
 
+// Shortcut card helper
 @Composable
 private fun ShortcutCard(
     title: String,
@@ -758,28 +794,12 @@ private fun ShortcutCard(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
-
             Spacer(modifier = Modifier.width(10.dp))
-
             Column {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

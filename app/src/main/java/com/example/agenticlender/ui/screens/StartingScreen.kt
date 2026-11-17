@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import android.util.Patterns
 import androidx.compose.foundation.BorderStroke
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,12 +43,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.agenticlender.R
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 
+// App welcome & landing screen
 @Composable
 fun LandingScreen(
     onNavigateToRegister: () -> Unit = {},
@@ -106,6 +109,7 @@ fun LandingScreen(
     }
 }
 
+// Borrower registration screen
 @Composable
 fun RegisterScreen(
     onNavigateToLogin: () -> Unit = {},
@@ -252,7 +256,6 @@ fun RegisterScreen(
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             val user = FirebaseAuth.getInstance().currentUser
-                            // user?.sendEmailVerification() // Commented out for  testing
 
                             val userId = user?.uid ?: ""
                             val userMap = hashMapOf(
@@ -299,6 +302,7 @@ fun RegisterScreen(
     }
 }
 
+// Email verification screen
 @Composable
 fun VerifyEmailScreen(
     onVerified: () -> Unit = {},
@@ -426,6 +430,7 @@ fun VerifyEmailScreen(
     }
 }
 
+// Select loan type screen (Mortgage vs HELOC)
 @Composable
 fun SelectApplicationTypeScreen(
     onTypeSelected: () -> Unit = {}
@@ -471,7 +476,6 @@ fun SelectApplicationTypeScreen(
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Card 1: Mortgage
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -529,7 +533,7 @@ fun SelectApplicationTypeScreen(
         if (selectedType == null) {
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -607,6 +611,7 @@ fun SelectApplicationTypeScreen(
     }
 }
 
+// User sign in screen
 @Composable
 fun LoginScreen(
     onNavigateToRegister: () -> Unit = {},
@@ -730,6 +735,7 @@ fun LoginScreen(
     }
 }
 
+// Password reset screen
 @Composable
 fun ResetPasswordScreen(
     onNavigateToLogin: () -> Unit = {}
@@ -828,11 +834,6 @@ fun ResetPasswordScreen(
             } else {
                 Text(text = "Send Password Reset Link")
             }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        TextButton(onClick = onNavigateToLogin) {
-            Text(text = "Back to Sign In")
         }
     }
 }

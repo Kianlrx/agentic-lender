@@ -18,6 +18,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.agenticlender.navigation.Screen
+import com.example.agenticlender.navigation.navItems
+import com.example.agenticlender.ui.screens.*
 import com.example.agenticlender.ui.theme.AgenticLenderTheme
 
 class MainActivity : ComponentActivity() {
@@ -185,7 +188,21 @@ fun MainFunction(modifier: Modifier = Modifier) {
                     onNavigateToPropertyDetails = { navController.navigate(Screen.PropertyDetailsScreen.route) },
                     onNavigateToUpload = { navController.navigate(Screen.DocumentUploadScreen.route) },
                     onNavigateToConsent = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) },
+                    onNavigateToReview = { navController.navigate(Screen.ReviewApplicationScreen.route) },
                     onNavigateToSelectApplicationType = { navController.navigate(Screen.SelectApplicationTypeScreen.route) }
+                )
+            }
+            composable(Screen.ReviewApplicationScreen.route) {
+                ReviewApplicationScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToConsent = { navController.navigate(Screen.ConsentAndDeclarationsScreen.route) },
+                    onEditPersonalDetails = { navController.navigate(Screen.PersonalDetailsScreen.route) },
+                    onEditEmployment = { navController.navigate(Screen.EmploymentAndIncomeScreen.route) },
+                    onEditDebts = { navController.navigate(Screen.DebtsAndCommitmentsScreen.route) },
+                    onEditDeposit = { navController.navigate(Screen.DepositAndAssetsScreen.route) },
+                    onEditLoanRequest = { navController.navigate(Screen.LoanRequestScreen.route) },
+                    onEditPropertyDetails = { navController.navigate(Screen.PropertyDetailsScreen.route) },
+                    onEditDocuments = { navController.navigate(Screen.DocumentUploadScreen.route) }
                 )
             }
             composable(Screen.DocumentsScreen.route) { DocumentsScreen() }

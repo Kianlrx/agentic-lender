@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,18 +20,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,12 +65,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 
+// Application step progress enum
 enum class StepStatus(val label: String, val color: Color) {
     COMPLETED("Completed", Color(0xFF43A047)),
     IN_PROGRESS("In Progress", Color(0xFF1E88E5)),
     NOT_STARTED("Not Started", Color(0xFF757575))
 }
 
+// Main Application Hub showing all steps & full application review button
 @Composable
 fun ApplicationScreen(
     onNavigateToPersonalDetails: () -> Unit = {},
@@ -75,6 +83,7 @@ fun ApplicationScreen(
     onNavigateToPropertyDetails: () -> Unit = {},
     onNavigateToUpload: () -> Unit = {},
     onNavigateToConsent: () -> Unit = {},
+    onNavigateToReview: () -> Unit = {},
     onNavigateToSelectApplicationType: () -> Unit = {}
 ) {
     val currentUser = FirebaseAuth.getInstance().currentUser
@@ -90,6 +99,7 @@ fun ApplicationScreen(
     var step7Status by remember { mutableStateOf(StepStatus.NOT_STARTED) }
     var step8Status by remember { mutableStateOf(StepStatus.NOT_STARTED) }
 
+    // Evaluate completed steps from Firestore
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).get()
@@ -107,11 +117,11 @@ fun ApplicationScreen(
                             applicationType = appType
                         }
                         if (!doc.getString("firstName").isNullOrBlank()) step1Status = StepStatus.COMPLETED
-                        if (!doc.getString("grossAnnualIncome").isNullOrBlank()) step2Status = StepStatus.COMPLETED
+                        if (!doc.getString("employerName").isNullOrBlank()) step2Status = StepStatus.COMPLETED
                         if (!doc.getString("rentOrMortgage").isNullOrBlank()) step3Status = StepStatus.COMPLETED
-                        if (!doc.getString("depositAmount").isNullOrBlank()) step4Status = StepStatus.COMPLETED
+                        if (!doc.getString("primaryBank").isNullOrBlank()) step4Status = StepStatus.COMPLETED
                         if (!doc.getString("loanAmount").isNullOrBlank() || !doc.getString("requestedCreditLimit").isNullOrBlank()) step5Status = StepStatus.COMPLETED
-                        if (!doc.getString("purchasePrice").isNullOrBlank() || !doc.getString("estimatedHomeValue").isNullOrBlank()) step6Status = StepStatus.COMPLETED
+                        if (!doc.getString("propertyAddress").isNullOrBlank()) step6Status = StepStatus.COMPLETED
                         step7Status = StepStatus.IN_PROGRESS
                         if (doc.getBoolean("isApplicationSubmitted") == true) step8Status = StepStatus.COMPLETED
                     }
@@ -159,6 +169,7 @@ fun ApplicationScreen(
             }
         }
 
+        // Progress bar card & Review Application button
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -190,11 +201,20 @@ fun ApplicationScreen(
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onNavigateToReview,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Review Full Application & Summary")
+                }
             }
         }
 
         Text(
-            text = "Application Process",
+            text = "Application Steps",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -262,41 +282,10 @@ fun ApplicationScreen(
             status = step8Status,
             onClick = onNavigateToConsent
         )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            )
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "Security Lock",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Bank-Level Security Guaranteed",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Your data is encrypted end-to-end and only visible to authorized underwriters.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
     }
 }
 
+// Step card item component
 @Composable
 private fun ApplicationStepCard(
     stepNumber: Int,
@@ -363,7 +352,6 @@ private fun ApplicationStepCard(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Status Badge
                     Surface(
                         color = status.color.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(12.dp)
@@ -387,25 +375,24 @@ private fun ApplicationStepCard(
             }
 
             Spacer(modifier = Modifier.width(8.dp))
-
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Navigate",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                contentDescription = "Open Step",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
+// Sub-screen top header with back arrow
 @Composable
-private fun SubScreenHeader(
+fun SubScreenHeader(
     title: String,
     onNavigateBack: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
     ) {
         IconButton(onClick = onNavigateBack) {
             Icon(
@@ -417,12 +404,13 @@ private fun SubScreenHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
         )
     }
 }
 
-// 1. Personal & Household Details Screen
+// Step 1: Collects personal details, home address, dependants & joint applicant info
 @Composable
 fun PersonalDetailsScreen(
     onNavigateNext: () -> Unit = {},
@@ -435,7 +423,7 @@ fun PersonalDetailsScreen(
     var lastName by rememberSaveable { mutableStateOf("") }
     var dob by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf(currentUser?.email ?: "") }
     var address by rememberSaveable { mutableStateOf("") }
     var householdStatus by rememberSaveable { mutableStateOf("") }
     var dependants by rememberSaveable { mutableStateOf("") }
@@ -452,6 +440,17 @@ fun PersonalDetailsScreen(
 
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
+            db.collection("users").document(uid).get()
+                .addOnSuccessListener { uDoc ->
+                    if (uDoc.exists()) {
+                        firstName = uDoc.getString("firstName") ?: firstName
+                        lastName = uDoc.getString("lastName") ?: lastName
+                        dob = uDoc.getString("dob") ?: dob
+                        phone = uDoc.getString("phone") ?: phone
+                        address = uDoc.getString("address") ?: address
+                    }
+                }
+
             db.collection("applications").document(uid).get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
@@ -459,7 +458,7 @@ fun PersonalDetailsScreen(
                         lastName = doc.getString("lastName") ?: lastName
                         dob = doc.getString("dob") ?: dob
                         phone = doc.getString("phone") ?: phone
-                        email = doc.getString("email") ?: (currentUser.email ?: email)
+                        email = doc.getString("email") ?: email
                         address = doc.getString("address") ?: address
                         householdStatus = doc.getString("householdStatus") ?: householdStatus
                         dependants = doc.getString("dependants") ?: dependants
@@ -482,7 +481,7 @@ fun PersonalDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader(
-            title = "1. Personal & Household Details",
+            title = "1. Personal Details",
             onNavigateBack = onNavigateBack
         )
         Text(
@@ -713,7 +712,7 @@ fun PersonalDetailsScreen(
     }
 }
 
-// 2. Employment & Income Screen
+// Step 2: Collects employer name, occupation, annual income & net take-home pay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmploymentAndIncomeScreen(
@@ -725,7 +724,7 @@ fun EmploymentAndIncomeScreen(
 
     var employerName by rememberSaveable { mutableStateOf("") }
     var jobTitle by rememberSaveable { mutableStateOf("") }
-    var employmentType by rememberSaveable { mutableStateOf("Full-time Employed") }
+    var employmentType by rememberSaveable { mutableStateOf("") }
     var yearsAtEmployer by rememberSaveable { mutableStateOf("") }
     var grossAnnualIncome by rememberSaveable { mutableStateOf("") }
     var additionalIncome by rememberSaveable { mutableStateOf("") }
@@ -929,7 +928,7 @@ fun EmploymentAndIncomeScreen(
     }
 }
 
-// 3. Debts & Commitments Screen
+// Step 3: Collects existing debt commitments, loan repayments & rent or mortgage expenses
 @Composable
 fun DebtsAndCommitmentsScreen(
     onNavigateNext: () -> Unit = {},
@@ -1073,7 +1072,7 @@ fun DebtsAndCommitmentsScreen(
     }
 }
 
-// 4. Deposit & Assets Screen
+// Step 4: Collects available deposit amount, source of deposit & primary bank name
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DepositAndAssetsScreen(
@@ -1252,7 +1251,7 @@ fun DepositAndAssetsScreen(
     }
 }
 
-// 5. Loan Request Screen (Conditional Form Fields based on applicationType)
+// Step 5: Collects requested loan amount, term, and rate preference for Mortgage or HELOC
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoanRequestScreen(
@@ -1264,13 +1263,11 @@ fun LoanRequestScreen(
 
     var applicationType by remember { mutableStateOf("Mortgage") }
 
-    // Mortgage specific fields
     var loanAmount by rememberSaveable { mutableStateOf("") }
     var loanPurpose by rememberSaveable { mutableStateOf("") }
     var loanTermYears by rememberSaveable { mutableStateOf("") }
     var rateType by rememberSaveable { mutableStateOf("") }
 
-    // HELOC specific fields
     var existingFirstMortgageBalance by rememberSaveable { mutableStateOf("") }
     var estimatedHomeEquity by rememberSaveable { mutableStateOf("") }
     var requestedCreditLimit by rememberSaveable { mutableStateOf("") }
@@ -1302,7 +1299,6 @@ fun LoanRequestScreen(
 
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
-            // Check loan type from user doc
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { uDoc ->
                     if (uDoc.exists()) {
@@ -1405,7 +1401,6 @@ fun LoanRequestScreen(
                 }
             }
         } else {
-            // Mortgage Specific Fields
             OutlinedTextField(
                 value = loanAmount,
                 onValueChange = { loanAmount = it },
@@ -1576,7 +1571,7 @@ fun LoanRequestScreen(
     }
 }
 
-// 6. Property Details Screen (Conditional Form Fields based on applicationType)
+// Step 6: Property Details
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PropertyDetailsScreen(
@@ -1825,7 +1820,7 @@ fun PropertyDetailsScreen(
     }
 }
 
-// 7. Document Upload Screen
+// Step 7: Document Upload
 @Composable
 fun DocumentUploadScreen(
     onNavigateNext: () -> Unit = {},
@@ -1851,7 +1846,6 @@ fun DocumentUploadScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Doc 1: Proof of Identity
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -1881,7 +1875,6 @@ fun DocumentUploadScreen(
             }
         }
 
-        // Doc 2: Income Proof
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -1911,7 +1904,6 @@ fun DocumentUploadScreen(
             }
         }
 
-        // Doc 3: Bank Statements
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -1941,7 +1933,6 @@ fun DocumentUploadScreen(
             }
         }
 
-        // Doc 4: Proof of Address
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -2012,7 +2003,7 @@ fun DocumentUploadScreen(
     }
 }
 
-// 8. Consent & Declarations Screen (Story 3: Give Consent)
+// Step 8: Consent & Declarations
 @Composable
 fun ConsentAndDeclarationsScreen(
     onSubmitApplication: () -> Unit = {},
@@ -2237,5 +2228,261 @@ fun ConsentAndDeclarationsScreen(
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+// Review Application Screen (Story: Review Application)
+@Composable
+fun ReviewApplicationScreen(
+    onNavigateBack: () -> Unit = {},
+    onNavigateToConsent: () -> Unit = {},
+    onEditPersonalDetails: () -> Unit = {},
+    onEditEmployment: () -> Unit = {},
+    onEditDebts: () -> Unit = {},
+    onEditDeposit: () -> Unit = {},
+    onEditLoanRequest: () -> Unit = {},
+    onEditPropertyDetails: () -> Unit = {},
+    onEditDocuments: () -> Unit = {}
+) {
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val db = FirebaseFirestore.getInstance()
+
+    // Application data state variables
+    var nameSummary by remember { mutableStateOf("Pending Input") }
+    var emailSummary by remember { mutableStateOf("Pending Input") }
+    var phoneSummary by remember { mutableStateOf("Pending Input") }
+
+    var employmentSummary by remember { mutableStateOf("Pending Input") }
+    var incomeSummary by remember { mutableStateOf("Pending Input") }
+
+    var debtsSummary by remember { mutableStateOf("Pending Input") }
+    var depositSummary by remember { mutableStateOf("Pending Input") }
+    var loanSummary by remember { mutableStateOf("Pending Input") }
+    var propertySummary by remember { mutableStateOf("Pending Input") }
+    var docSummary by remember { mutableStateOf("Pending Input") }
+
+    // Section completion statuses
+    var isSec1Complete by remember { mutableStateOf(false) }
+    var isSec2Complete by remember { mutableStateOf(false) }
+    var isSec3Complete by remember { mutableStateOf(false) }
+    var isSec4Complete by remember { mutableStateOf(false) }
+    var isSec5Complete by remember { mutableStateOf(false) }
+    var isSec6Complete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentUser?.uid) {
+        currentUser?.uid?.let { uid ->
+            db.collection("applications").document(uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        val fName = doc.getString("firstName") ?: ""
+                        val lName = doc.getString("lastName") ?: ""
+                        if (fName.isNotBlank()) {
+                            nameSummary = "$fName $lName".trim()
+                            emailSummary = doc.getString("email") ?: ""
+                            phoneSummary = doc.getString("phone") ?: ""
+                            isSec1Complete = true
+                        }
+
+                        val emp = doc.getString("employerName") ?: ""
+                        val inc = doc.getString("grossAnnualIncome") ?: ""
+                        if (emp.isNotBlank() && inc.isNotBlank()) {
+                            employmentSummary = "$emp (${doc.getString("jobTitle") ?: ""})"
+                            incomeSummary = "Gross: €$inc / yr • Net: €${doc.getString("netMonthlyIncome") ?: "0"} / mo"
+                            isSec2Complete = true
+                        }
+
+                        val rent = doc.getString("rentOrMortgage") ?: ""
+                        if (rent.isNotBlank()) {
+                            debtsSummary = "Rent/Mortgage: €$rent / mo • Loans: €${doc.getString("existingLoanRepayment") ?: "0"} / mo"
+                            isSec3Complete = true
+                        }
+
+                        val dep = doc.getString("depositAmount") ?: ""
+                        if (dep.isNotBlank()) {
+                            depositSummary = "Deposit: €$dep (${doc.getString("depositSource") ?: "Savings"}) • Bank: ${doc.getString("primaryBank") ?: ""}"
+                            isSec4Complete = true
+                        }
+
+                        val loanAmt = doc.getString("loanAmount") ?: doc.getString("requestedCreditLimit") ?: ""
+                        if (loanAmt.isNotBlank()) {
+                            loanSummary = "Amount: €$loanAmt • Term: ${doc.getString("loanTermYears") ?: "30"} yrs • Rate: ${doc.getString("rateType") ?: "Fixed"}"
+                            isSec5Complete = true
+                        }
+
+                        val propVal = doc.getString("purchasePrice") ?: doc.getString("estimatedHomeValue") ?: ""
+                        if (propVal.isNotBlank()) {
+                            propertySummary = "Valuation: €$propVal • Address: ${doc.getString("propertyAddress") ?: ""}"
+                            isSec6Complete = true
+                        }
+                    }
+                }
+
+            db.collection("users").document(uid).collection("documents").get()
+                .addOnSuccessListener { snap ->
+                    if (snap != null && !snap.isEmpty) {
+                        val count = snap.documents.count { (it.getString("status") ?: "") == "UPLOADED" || (it.getString("status") ?: "") == "VERIFIED" }
+                        docSummary = "$count of ${snap.size()} Documents Verified"
+                    }
+                }
+        }
+    }
+
+    val allComplete = isSec1Complete && isSec2Complete && isSec3Complete && isSec4Complete && isSec5Complete && isSec6Complete
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SubScreenHeader("Review Full Application", onNavigateBack)
+        Text("Review all application details before final consent and submission. Tap Edit to fix any section.")
+
+        if (!allComplete) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(imageVector = Icons.Default.WarningAmber, contentDescription = "Warning", tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "⚠️ Incomplete Application: Please complete all sections marked 'Action Required' before submitting.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+
+        // Section 1: Personal Details
+        ReviewSectionCard(
+            sectionTitle = "1. Personal & Household Details",
+            isComplete = isSec1Complete,
+            detailsText = "Name: $nameSummary\nEmail: $emailSummary\nPhone: $phoneSummary",
+            onEditClick = onEditPersonalDetails
+        )
+
+        // Section 2: Employment & Income
+        ReviewSectionCard(
+            sectionTitle = "2. Employment & Income",
+            isComplete = isSec2Complete,
+            detailsText = "Employer: $employmentSummary\nIncome: $incomeSummary",
+            onEditClick = onEditEmployment
+        )
+
+        // Section 3: Debts & Commitments
+        ReviewSectionCard(
+            sectionTitle = "3. Debts & Commitments",
+            isComplete = isSec3Complete,
+            detailsText = debtsSummary,
+            onEditClick = onEditDebts
+        )
+
+        // Section 4: Deposit & Assets
+        ReviewSectionCard(
+            sectionTitle = "4. Deposit & Assets",
+            isComplete = isSec4Complete,
+            detailsText = depositSummary,
+            onEditClick = onEditDeposit
+        )
+
+        // Section 5: Loan Request
+        ReviewSectionCard(
+            sectionTitle = "5. Loan Request",
+            isComplete = isSec5Complete,
+            detailsText = loanSummary,
+            onEditClick = onEditLoanRequest
+        )
+
+        // Section 6: Property Details
+        ReviewSectionCard(
+            sectionTitle = "6. Property Details",
+            isComplete = isSec6Complete,
+            detailsText = propertySummary,
+            onEditClick = onEditPropertyDetails
+        )
+
+        // Section 7: Document Upload Status
+        ReviewSectionCard(
+            sectionTitle = "7. Uploaded Documents",
+            isComplete = true,
+            detailsText = docSummary,
+            onEditClick = onEditDocuments
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Back")
+            }
+            Button(
+                onClick = onNavigateToConsent,
+                modifier = Modifier.weight(1.5f),
+                enabled = allComplete
+            ) {
+                Text("Proceed to Submit")
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+// Helper card for review screen section summary with Edit button & status badge
+@Composable
+private fun ReviewSectionCard(
+    sectionTitle: String,
+    isComplete: Boolean,
+    detailsText: String,
+    onEditClick: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = sectionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                Surface(
+                    color = if (isComplete) Color(0xFF43A047).copy(alpha = 0.15f) else Color(0xFFE53935).copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (isComplete) "Complete ✅" else "Action Required 🔴",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isComplete) Color(0xFF43A047) else Color(0xFFE53935),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = detailsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                OutlinedButton(onClick = onEditClick) {
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Edit")
+                }
+            }
+        }
     }
 }

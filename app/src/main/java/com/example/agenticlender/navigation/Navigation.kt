@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.ui.graphics.vector.ImageVector
 
+//class holding all navigation routes in the app
 sealed class Screen(val route: String) {
     object LandingScreen : Screen("Landing")
     object RegisterScreen : Screen("Register")
@@ -34,14 +35,17 @@ sealed class Screen(val route: String) {
     object PropertyDetailsScreen : Screen("PropertyDetails")
     object DocumentUploadScreen : Screen("DocumentUpload")
     object ConsentAndDeclarationsScreen : Screen("ConsentAndDeclarations")
+    object ReviewApplicationScreen : Screen("ReviewApplication")
 }
 
+// Data for bottom navigation bar items
 data class NavItem(
     val label: String,
     val iconId: ImageVector,
     val route: String
 )
 
+// Main bottom navigation bar items list
 val navItems = listOf(
     NavItem(label = "Dashboard", iconId = Icons.Default.Home, route = Screen.UserDashboard.route),
     NavItem(label = "Application", iconId = Icons.Default.Description, route = Screen.ApplicationScreen.route),

@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// Help and broker support screen
 @Composable
 fun HelpScreen(
     onNavigateBack: () -> Unit = {}
@@ -347,6 +348,7 @@ fun HelpScreen(
     }
 }
 
+// Collapsible FAQ card item
 @Composable
 fun FaqCard(question: String, answer: String) {
     var expanded by remember { mutableStateOf(false) }

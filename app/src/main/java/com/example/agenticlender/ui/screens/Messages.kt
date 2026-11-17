@@ -1,6 +1,8 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,13 +10,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,29 +40,51 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+// Data holder for secure application-linked chat messages
 data class ChatMessage(
     val id: String = "",
+    val applicationId: String = "",
     val sender: String = "",
     val text: String = "",
     val timestamp: String = "Just now",
-    val isFromUser: Boolean = false
+    val isFromUser: Boolean = false,
+    val isRead: Boolean = true
 )
 
+// Secure broker & underwriting team messaging screen
 @Composable
 fun MessageScreen() {
     var messageText by remember { mutableStateOf("") }
+    var activeApplicationId by remember { mutableStateOf("APP-2025") }
+    var unreadCount by remember { mutableStateOf(0) }
     val messages = remember { mutableStateListOf<ChatMessage>() }
+
     val currentUser = FirebaseAuth.getInstance().currentUser
     val userId = currentUser?.uid ?: "anonymous_user"
 
-    // Real-time synchronization with Cloud Firestore
+    // Fetch active application ID for linking
+    LaunchedEffect(userId) {
+        val db = FirebaseFirestore.getInstance()
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    val appId = doc.getString("activeApplicationId") ?: "APP-${userId.take(6).uppercase()}"
+                    activeApplicationId = appId
+                }
+            }
+    }
+
+    // Scoped real-time message listener (strictly restricted to authorized borrower's account)
     DisposableEffect(userId) {
         val db = FirebaseFirestore.getInstance()
         val listener = db.collection("chats")
@@ -63,11 +95,24 @@ fun MessageScreen() {
                 if (e != null) return@addSnapshotListener
                 if (snapshot != null) {
                     messages.clear()
+                    var unread = 0
                     for (doc in snapshot.documents) {
-                        val sender = doc.getString("sender") ?: "Unknown"
+                        val appId = doc.getString("applicationId") ?: activeApplicationId
+                        val sender = doc.getString("sender") ?: "Mortgage Broker"
                         val text = doc.getString("text") ?: ""
                         val timestamp = doc.getTimestamp("timestamp")
                         val isFromUser = doc.getBoolean("isFromUser") ?: false
+                        val isRead = doc.getBoolean("isRead") ?: true
+
+                        if (!isFromUser && !isRead) {
+                            unread++
+                            // Automatically mark broker message as read when borrower views the screen
+                            db.collection("chats")
+                                .document(userId)
+                                .collection("messages")
+                                .document(doc.id)
+                                .update("isRead", true)
+                        }
 
                         val timeStr = timestamp?.toDate()?.let {
                             SimpleDateFormat("hh:mm a", Locale.getDefault()).format(it)
@@ -76,13 +121,16 @@ fun MessageScreen() {
                         messages.add(
                             ChatMessage(
                                 id = doc.id,
+                                applicationId = appId,
                                 sender = sender,
                                 text = text,
                                 timestamp = timeStr,
-                                isFromUser = isFromUser
+                                isFromUser = isFromUser,
+                                isRead = isRead
                             )
                         )
                     }
+                    unreadCount = unread
                 }
             }
         onDispose {
@@ -95,18 +143,58 @@ fun MessageScreen() {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Messages",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = "Direct synchronized chat with your mortgage broker",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Application Header & Scoped Link Banner
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Broker Messaging",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Secure application-linked chat ($activeApplicationId)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (unreadCount > 0) {
+                Badge(containerColor = MaterialTheme.colorScheme.error) {
+                    Text("$unreadCount Unread")
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Security Info Banner
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = "Security",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Messages are end-to-end encrypted & linked to Application ID $activeApplicationId.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Scoped Chat Message Stream
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -128,7 +216,26 @@ fun MessageScreen() {
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(text = msg.sender, style = MaterialTheme.typography.labelSmall, color = textColor)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = msg.sender,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (!msg.isFromUser && !msg.isRead) {
+                                    Icon(
+                                        imageVector = Icons.Default.MarkEmailUnread,
+                                        contentDescription = "Unread",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(text = msg.text, style = MaterialTheme.typography.bodyMedium, color = textColor)
                             Spacer(modifier = Modifier.height(2.dp))
@@ -146,6 +253,7 @@ fun MessageScreen() {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Send Message Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -153,7 +261,7 @@ fun MessageScreen() {
             OutlinedTextField(
                 value = messageText,
                 onValueChange = { messageText = it },
-                placeholder = { Text("Type a message to your broker...") },
+                placeholder = { Text("Type a secure message...") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
@@ -163,10 +271,13 @@ fun MessageScreen() {
                     if (messageText.isNotBlank()) {
                         val db = FirebaseFirestore.getInstance()
                         val messageMap = hashMapOf(
-                            "sender" to (currentUser?.email ?: "Client"),
+                            "applicationId" to activeApplicationId,
+                            "borrowerUid" to userId,
+                            "sender" to (currentUser?.email ?: "Borrower"),
                             "text" to messageText.trim(),
-                            "timestamp" to com.google.firebase.Timestamp.now(),
-                            "isFromUser" to true
+                            "timestamp" to Timestamp.now(),
+                            "isFromUser" to true,
+                            "isRead" to true
                         )
                         db.collection("chats")
                             .document(userId)

@@ -1,5 +1,9 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +31,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,13 +52,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import java.util.Locale
 
+// Document status options and badge colors
 enum class DocumentStatus(val label: String, val color: Color) {
     MISSING("Missing / Action Required", Color(0xFFE53935)),
     UPLOADED("Uploaded", Color(0xFF1E88E5)),
@@ -63,6 +71,7 @@ enum class DocumentStatus(val label: String, val color: Color) {
     ADDITIONAL_EVIDENCE_REQUIRED("Additional Evidence Required", Color(0xFF8E24AA))
 }
 
+// Data class for document items and metadata
 data class DocumentItemData(
     val id: String,
     val title: String,
@@ -71,18 +80,27 @@ data class DocumentItemData(
     var fileName: String? = null,
     var fileSize: String? = null,
     var fileType: String? = null,
+    var downloadUrl: String? = null,
     var rejectionReason: String? = null,
     var reviewedBy: String? = null
 )
 
+// Main screen for document uploads & status tracking
 @Composable
 fun DocumentsScreen() {
+    val context = LocalContext.current
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
     val currentUser = auth.currentUser
 
-    var filterIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Action Required, 2: Uploaded, 3: Verified, 4: Rejected
+    // Screen state variables
+    var filterIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectedDocToUpload by remember { mutableStateOf<DocumentItemData?>(null) }
+    var isUploading by remember { mutableStateOf(false) }
+    var uploadErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showPreviewDialog by remember { mutableStateOf<DocumentItemData?>(null) }
 
+    // Required documents list
     var documents by remember {
         mutableStateOf(
             listOf(
@@ -120,12 +138,120 @@ fun DocumentsScreen() {
         )
     }
 
-    var documentToUpload by remember { mutableStateOf<DocumentItemData?>(null) }
-    var selectedSimulatedFormat by remember { mutableStateOf("PDF") }
-    var selectedSimulatedSizeMb by remember { mutableStateOf(3) }
-    var uploadErrorMessage by remember { mutableStateOf<String?>(null) }
-    var showPreviewDialog by remember { mutableStateOf<DocumentItemData?>(null) }
+    // System file picker to select PDF, PNG or JPG files from the device
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val targetDoc = selectedDocToUpload ?: return@rememberLauncherForActivityResult
 
+            val contentResolver = context.contentResolver
+            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+
+            // Get file name and size from the device
+            var fileName = "${targetDoc.title.replace(" ", "_")}.pdf"
+            var fileSizeMb = 0.0
+
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                        if (nameIndex != -1) {
+                            val queriedName = cursor.getString(nameIndex)
+                            if (!queriedName.isNullOrBlank()) fileName = queriedName
+                        }
+                        if (sizeIndex != -1) {
+                            val bytes = cursor.getLong(sizeIndex)
+                            fileSizeMb = bytes / (1024.0 * 1024.0)
+                        }
+                    }
+                }
+            } catch (_: Exception) { }
+
+            // Check file type: only PDF, PNG, or JPG allowed
+            val isPdf = mimeType.contains("pdf", ignoreCase = true) || fileName.endsWith(".pdf", ignoreCase = true)
+            val isImage = mimeType.contains("image", ignoreCase = true) ||
+                    fileName.endsWith(".png", ignoreCase = true) ||
+                    fileName.endsWith(".jpg", ignoreCase = true) ||
+                    fileName.endsWith(".jpeg", ignoreCase = true)
+
+            if (!isPdf && !isImage) {
+                uploadErrorMessage = "Invalid file format! Uploads are restricted to PDF, PNG, or JPG."
+                return@rememberLauncherForActivityResult
+            }
+
+            // Check file size: max 10 MB limit
+            if (fileSizeMb > 10.0) {
+                uploadErrorMessage = String.format(Locale.getDefault(), "File size exceeds 10 MB limit! (Selected: %.1f MB)", fileSizeMb)
+                return@rememberLauncherForActivityResult
+            }
+
+            // Upload directly to Firebase Storage
+            val uid = currentUser?.uid ?: "anonymous"
+            val docId = targetDoc.id
+            val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                .child("documents")
+                .child(uid)
+                .child("${docId}_${System.currentTimeMillis()}_$fileName")
+
+            isUploading = true
+            uploadErrorMessage = null
+
+            storageRef.putFile(uri)
+                .addOnSuccessListener {
+                    // Fetch public download URL after upload succeeds
+                    storageRef.downloadUrl.addOnSuccessListener { uriRes: Uri ->
+                        isUploading = false
+                        val downloadUrl = uriRes.toString()
+                        val formattedSize = if (fileSizeMb > 0) String.format(Locale.getDefault(), "%.1f MB", fileSizeMb) else "2.0 MB"
+
+                        // Prepare document metadata
+                        val docData = hashMapOf(
+                            "id" to docId,
+                            "title" to targetDoc.title,
+                            "status" to DocumentStatus.UPLOADED.name,
+                            "fileName" to fileName,
+                            "fileSize" to formattedSize,
+                            "fileType" to mimeType,
+                            "downloadUrl" to downloadUrl,
+                            "uploadedAt" to Timestamp.now(),
+                            "rejectionReason" to null
+                        )
+
+                        // Save details to Firestore database
+                        db.collection("users").document(uid).collection("documents").document(docId)
+                            .set(docData, SetOptions.merge())
+                        db.collection("applications").document(uid).collection("documents").document(docId)
+                            .set(docData, SetOptions.merge())
+
+                        // Update list on screen
+                        documents = documents.map { d ->
+                            if (d.id == docId) {
+                                d.copy(
+                                    status = DocumentStatus.UPLOADED,
+                                    fileName = fileName,
+                                    fileSize = formattedSize,
+                                    fileType = mimeType,
+                                    downloadUrl = downloadUrl,
+                                    rejectionReason = null
+                                )
+                            } else d
+                        }
+                        selectedDocToUpload = null
+                    }.addOnFailureListener { exc: Exception ->
+                        isUploading = false
+                        uploadErrorMessage = "Failed to obtain download URL: ${exc.localizedMessage}"
+                    }
+                }
+                .addOnFailureListener { exc: Exception ->
+                    isUploading = false
+                    uploadErrorMessage = "Firebase Storage Upload Failed: ${exc.localizedMessage}"
+                }
+        }
+    }
+
+    // Sync uploaded document statuses from Firestore
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).collection("documents").get()
@@ -141,6 +267,7 @@ fun DocumentsScreen() {
                                     fileName = matchDoc.getString("fileName") ?: docItem.fileName,
                                     fileSize = matchDoc.getString("fileSize") ?: docItem.fileSize,
                                     fileType = matchDoc.getString("fileType") ?: docItem.fileType,
+                                    downloadUrl = matchDoc.getString("downloadUrl") ?: docItem.downloadUrl,
                                     rejectionReason = matchDoc.getString("rejectionReason") ?: docItem.rejectionReason,
                                     reviewedBy = matchDoc.getString("reviewedBy") ?: docItem.reviewedBy
                                 )
@@ -154,9 +281,11 @@ fun DocumentsScreen() {
         }
     }
 
+    // Progress counter
     val completedCount = documents.count { it.status == DocumentStatus.VERIFIED || it.status == DocumentStatus.UPLOADED }
     val progress = if (documents.isNotEmpty()) completedCount.toFloat() / documents.size else 0f
 
+    // Filter documents by tab
     val filteredDocuments = when (filterIndex) {
         1 -> documents.filter { it.status == DocumentStatus.MISSING || it.status == DocumentStatus.REJECTED || it.status == DocumentStatus.ADDITIONAL_EVIDENCE_REQUIRED }
         2 -> documents.filter { it.status == DocumentStatus.UPLOADED }
@@ -172,7 +301,7 @@ fun DocumentsScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Title & Subtitle
+        // Title
         Column {
             Text(
                 text = "Documents Hub",
@@ -181,12 +310,13 @@ fun DocumentsScreen() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Upload clear, valid copies of required documents to process your application.",
+                text = "Upload required verification documents directly to Firebase Cloud Storage.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
+        // Progress bar card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -202,7 +332,7 @@ fun DocumentsScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Document Verification Progress",
+                        text = "Verification Progress",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -223,6 +353,7 @@ fun DocumentsScreen() {
             }
         }
 
+        // Filter chips
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -249,119 +380,58 @@ fun DocumentsScreen() {
             )
         }
 
+        // Document cards
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             filteredDocuments.forEach { doc ->
                 DocumentCardItem(
                     doc = doc,
-                    onUploadClick = { documentToUpload = doc; uploadErrorMessage = null },
+                    onUploadClick = {
+                        selectedDocToUpload = doc
+                        uploadErrorMessage = null
+                        // Launch system file picker
+                        filePickerLauncher.launch(arrayOf("application/pdf", "image/png", "image/jpeg"))
+                    },
                     onPreviewClick = { showPreviewDialog = doc }
                 )
             }
         }
     }
 
-    documentToUpload?.let { doc ->
+    // Uploading popup
+    if (isUploading) {
         AlertDialog(
-            onDismissRequest = { documentToUpload = null },
-            title = { Text("Upload ${doc.title}") },
+            onDismissRequest = { },
+            title = { Text("Uploading to Firebase Storage...") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Supported file formats: PDF, PNG, JPG (Max size: 10 MB)")
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Simulated File Format:")
-                        listOf("PDF", "PNG", "JPG", "EXE (Invalid)").forEach { fmt ->
-                            FilterChip(
-                                selected = selectedSimulatedFormat == fmt,
-                                onClick = { selectedSimulatedFormat = fmt; uploadErrorMessage = null },
-                                label = { Text(fmt) }
-                            )
-                        }
-                    }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Simulated File Size:")
-                        listOf(2, 5, 12).forEach { sz ->
-                            FilterChip(
-                                selected = selectedSimulatedSizeMb == sz,
-                                onClick = { selectedSimulatedSizeMb = sz; uploadErrorMessage = null },
-                                label = { Text("$sz MB") }
-                            )
-                        }
-                    }
-
-                    if (uploadErrorMessage != null) {
-                        Text(
-                            text = uploadErrorMessage!!,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        // Restriction checks
-                        if (selectedSimulatedFormat == "EXE (Invalid)") {
-                            uploadErrorMessage = "Invalid file format! Uploads are restricted to PDF, PNG, or JPG."
-                            return@Button
-                        }
-                        if (selectedSimulatedSizeMb > 10) {
-                            uploadErrorMessage = "File size exceeds 10 MB limit! Please select a smaller file."
-                            return@Button
-                        }
-
-                        val generatedFileName = "${doc.title.replace(" ", "_")}_Document.${selectedSimulatedFormat.lowercase()}"
-                        val newStatus = DocumentStatus.UPLOADED
-                        val newDoc = doc.copy(
-                            status = newStatus,
-                            fileName = generatedFileName,
-                            fileSize = "$selectedSimulatedSizeMb.0 MB",
-                            fileType = "application/${selectedSimulatedFormat.lowercase()}",
-                            rejectionReason = null
-                        )
-
-                        currentUser?.uid?.let { uid ->
-                            val docData = hashMapOf(
-                                "id" to doc.id,
-                                "title" to doc.title,
-                                "status" to newStatus.name,
-                                "fileName" to generatedFileName,
-                                "fileSize" to "$selectedSimulatedSizeMb.0 MB",
-                                "fileType" to selectedSimulatedFormat.lowercase(),
-                                "uploadedAt" to Timestamp.now(),
-                                "rejectionReason" to null
-                            )
-                            db.collection("users").document(uid).collection("documents").document(doc.id)
-                                .set(docData, SetOptions.merge())
-                            db.collection("applications").document(uid).collection("documents").document(doc.id)
-                                .set(docData, SetOptions.merge())
-                        }
-
-                        documents = documents.map { if (it.id == doc.id) newDoc else it }
-                        documentToUpload = null
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Confirm Upload")
+                    CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                    Text("Uploading document file securely to Firebase Storage buckets...")
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { documentToUpload = null }) {
-                    Text("Cancel")
+            confirmButton = { }
+        )
+    }
+
+    // Error notice popup
+    if (uploadErrorMessage != null && !isUploading) {
+        AlertDialog(
+            onDismissRequest = { uploadErrorMessage = null },
+            title = { Text("Upload Notice") },
+            text = { Text(uploadErrorMessage!!) },
+            confirmButton = {
+                Button(onClick = { uploadErrorMessage = null }) {
+                    Text("OK")
                 }
             }
         )
     }
 
+    // Document preview popup
     showPreviewDialog?.let { doc ->
         AlertDialog(
             onDismissRequest = { showPreviewDialog = null },
@@ -369,9 +439,13 @@ fun DocumentsScreen() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("File Name: ${doc.fileName ?: "No file attached"}")
+                    Text("File Size: ${doc.fileSize ?: "N/A"}")
                     Text("Status: ${doc.status.label}")
+                    if (!doc.downloadUrl.isNullOrBlank()) {
+                        Text("Firebase Storage URL:\n${doc.downloadUrl}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
                     if (!doc.rejectionReason.isNullOrBlank()) {
-                        Text("Rejection/Review Reason: ${doc.rejectionReason}", color = MaterialTheme.colorScheme.error)
+                        Text("Rejection Reason: ${doc.rejectionReason}", color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
@@ -382,10 +456,10 @@ fun DocumentsScreen() {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(24.dp),
+                                .padding(20.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("📄 Preview of ${doc.fileName}")
+                            Text("Uploaded File: ${doc.fileName}")
                         }
                     }
                 }
@@ -399,6 +473,7 @@ fun DocumentsScreen() {
     }
 }
 
+// Card item for each document
 @Composable
 private fun DocumentCardItem(
     doc: DocumentItemData,
@@ -437,6 +512,7 @@ private fun DocumentCardItem(
                 StatusBadgeItem(status = doc.status)
             }
 
+            // Show reviewer notes if rejected
             if (!doc.rejectionReason.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -482,7 +558,7 @@ private fun DocumentCardItem(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "${doc.fileName} (${doc.fileSize ?: "2 MB"})",
+                        text = "${doc.fileName} (${doc.fileSize ?: "File"})",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
@@ -503,11 +579,13 @@ private fun DocumentCardItem(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     OutlinedButton(onClick = onUploadClick) {
-                        Text("Re-Upload")
+                        Text("Re-Upload File")
                     }
                 } else {
                     Button(onClick = onUploadClick) {
-                        Text("Upload Document")
+                        Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Select & Upload File")
                     }
                 }
             }
@@ -515,6 +593,7 @@ private fun DocumentCardItem(
     }
 }
 
+// Status badge component
 @Composable
 private fun StatusBadgeItem(status: DocumentStatus) {
     val icon = when (status) {

@@ -1,4 +1,4 @@
-package com.example.agenticlender
+package com.example.agenticlender.ui.screens
 
 import android.util.Patterns
 import androidx.compose.foundation.background
@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// Borrower profile screen
 @Composable
 fun ProfileScreen(
     onNavigateBack: () -> Unit = {}
@@ -50,6 +51,7 @@ fun ProfileScreen(
     val db = remember { FirebaseFirestore.getInstance() }
     val currentUser = auth.currentUser
 
+    // Profile state variables
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf(currentUser?.email ?: "") }
@@ -61,6 +63,7 @@ fun ProfileScreen(
     var validationError by remember { mutableStateOf<String?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
 
+    // Fetch user profile from Firestore
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             db.collection("users").document(uid).get()
@@ -103,7 +106,7 @@ fun ProfileScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header with Back Button
+        // Back header
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -130,6 +133,7 @@ fun ProfileScreen(
                 CircularProgressIndicator()
             }
         } else {
+            // Profile card summary
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -285,9 +289,9 @@ fun ProfileScreen(
                 }
             }
 
+            // Save profile button
             Button(
                 onClick = {
-                    // Validation
                     if (firstName.isBlank() || lastName.isBlank() || email.isBlank() || phone.isBlank()) {
                         validationError = "First Name, Last Name, Email, and Mobile Number are required."
                         isSaved = false
