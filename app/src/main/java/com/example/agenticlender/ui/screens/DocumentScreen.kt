@@ -265,15 +265,6 @@ fun DocumentsScreen() {
         }
     }
 
-    // 3. System Document File Picker Launcher
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            processAndUploadUri(uri)
-        }
-    }
-
     // Sync uploaded document statuses from Firestore
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
@@ -468,19 +459,6 @@ fun DocumentsScreen() {
                         Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Choose Photo from Gallery")
-                    }
-
-                    // Option 3: Pick PDF or File
-                    OutlinedButton(
-                        onClick = {
-                            showOptionModal = null
-                            filePickerLauncher.launch(arrayOf("application/pdf", "image/png", "image/jpeg"))
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(imageVector = Icons.Default.Description, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Select Document / PDF File")
                     }
                 }
             },

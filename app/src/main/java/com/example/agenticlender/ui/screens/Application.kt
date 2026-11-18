@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UploadFile
@@ -430,6 +431,18 @@ fun SubScreenHeader(
     }
 }
 
+// Guidance label placed above input fields
+@Composable
+fun InputGuidanceLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(bottom = 2.dp, top = 2.dp)
+    )
+}
+
 // Step 1: Collects personal details, home address, dependants & joint applicant info
 @Composable
 fun PersonalDetailsScreen(
@@ -464,11 +477,18 @@ fun PersonalDetailsScreen(
             db.collection("users").document(uid).get()
                 .addOnSuccessListener { uDoc ->
                     if (uDoc.exists()) {
-                        firstName = uDoc.getString("firstName") ?: firstName
-                        lastName = uDoc.getString("lastName") ?: lastName
-                        dob = uDoc.getString("dob") ?: dob
-                        phone = uDoc.getString("phone") ?: phone
-                        address = uDoc.getString("address") ?: address
+                        val f = uDoc.getString("firstName")
+                        if (!f.isNullOrBlank() && firstName.isBlank()) firstName = f
+                        val l = uDoc.getString("lastName")
+                        if (!l.isNullOrBlank() && lastName.isBlank()) lastName = l
+                        val d = uDoc.getString("dob")
+                        if (!d.isNullOrBlank() && dob.isBlank()) dob = d
+                        val p = uDoc.getString("phone")
+                        if (!p.isNullOrBlank() && phone.isBlank()) phone = p
+                        val a = uDoc.getString("address")
+                        if (!a.isNullOrBlank() && address.isBlank()) address = a
+                        val e = uDoc.getString("email")
+                        if (!e.isNullOrBlank() && email.isBlank()) email = e
                     }
                 }
 
@@ -476,20 +496,37 @@ fun PersonalDetailsScreen(
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
                         isReadOnly = doc.getBoolean("isApplicationSubmitted") == true
-                        firstName = doc.getString("firstName") ?: firstName
-                        lastName = doc.getString("lastName") ?: lastName
-                        dob = doc.getString("dob") ?: dob
-                        phone = doc.getString("phone") ?: phone
-                        email = doc.getString("email") ?: email
-                        address = doc.getString("address") ?: address
-                        householdStatus = doc.getString("householdStatus") ?: householdStatus
-                        dependants = doc.getString("dependants") ?: dependants
+                        
+                        val f = doc.getString("firstName")
+                        if (!f.isNullOrBlank()) firstName = f
+                        val l = doc.getString("lastName")
+                        if (!l.isNullOrBlank()) lastName = l
+                        val d = doc.getString("dob")
+                        if (!d.isNullOrBlank()) dob = d
+                        val p = doc.getString("phone")
+                        if (!p.isNullOrBlank()) phone = p
+                        val e = doc.getString("email")
+                        if (!e.isNullOrBlank()) email = e
+                        val a = doc.getString("address")
+                        if (!a.isNullOrBlank()) address = a
+
+                        val hs = doc.getString("householdStatus")
+                        if (!hs.isNullOrBlank()) householdStatus = hs
+                        val dep = doc.getString("dependants")
+                        if (!dep.isNullOrBlank()) dependants = dep
+
                         isJointApplication = doc.getBoolean("isJointApplication") ?: isJointApplication
-                        coFirstName = doc.getString("coFirstName") ?: coFirstName
-                        coLastName = doc.getString("coLastName") ?: coLastName
-                        coEmail = doc.getString("coEmail") ?: coEmail
-                        coPhone = doc.getString("coPhone") ?: coPhone
-                        coDob = doc.getString("coDob") ?: coDob
+
+                        val cf = doc.getString("coFirstName")
+                        if (!cf.isNullOrBlank()) coFirstName = cf
+                        val cl = doc.getString("coLastName")
+                        if (!cl.isNullOrBlank()) coLastName = cl
+                        val ce = doc.getString("coEmail")
+                        if (!ce.isNullOrBlank()) coEmail = ce
+                        val cp = doc.getString("coPhone")
+                        if (!cp.isNullOrBlank()) coPhone = cp
+                        val cd = doc.getString("coDob")
+                        if (!cd.isNullOrBlank()) coDob = cd
                     }
                 }
         }
@@ -531,14 +568,6 @@ fun PersonalDetailsScreen(
                 }
             }
         }
-
-        Text(
-            text = "Please provide your personal, contact, and household information.",
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         OutlinedTextField(
             value = firstName,
             onValueChange = { firstName = it },
@@ -555,6 +584,7 @@ fun PersonalDetailsScreen(
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
+        InputGuidanceLabel("Date of Birth: Enter your birth date in DD/MM/YYYY format (e.g., 25/06/1990).")
         OutlinedTextField(
             value = dob,
             onValueChange = { dob = it },
@@ -579,6 +609,7 @@ fun PersonalDetailsScreen(
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
+        InputGuidanceLabel("Home Address: Enter your current full residential street address (including apartment/house number and city).")
         OutlinedTextField(
             value = address,
             onValueChange = { address = it },
@@ -587,6 +618,7 @@ fun PersonalDetailsScreen(
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
+        InputGuidanceLabel("Specify whether you own your home outright, have a mortgage, rent, or live with family.")
         OutlinedTextField(
             value = householdStatus,
             onValueChange = { householdStatus = it },
@@ -595,6 +627,7 @@ fun PersonalDetailsScreen(
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
+        InputGuidanceLabel("Enter the total number of children or family members who rely on you financially.")
         OutlinedTextField(
             value = dependants,
             onValueChange = { dependants = it },
@@ -714,6 +747,18 @@ fun PersonalDetailsScreen(
                                 "updatedAt" to Timestamp.now()
                             )
                             db.collection("applications").document(uid).set(data, SetOptions.merge())
+
+                            val userUpdates = hashMapOf(
+                                "firstName" to firstName.trim(),
+                                "lastName" to lastName.trim(),
+                                "fullName" to "${firstName.trim()} ${lastName.trim()}",
+                                "email" to email.trim(),
+                                "phone" to phone.trim(),
+                                "dob" to dob.trim(),
+                                "address" to address.trim(),
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
                         }
                         errorMessage = null
                         successMessage = "Draft Saved Successfully ✅"
@@ -755,6 +800,18 @@ fun PersonalDetailsScreen(
                                 "updatedAt" to Timestamp.now()
                             )
                             db.collection("applications").document(uid).set(data, SetOptions.merge())
+
+                            val userUpdates = hashMapOf(
+                                "firstName" to firstName.trim(),
+                                "lastName" to lastName.trim(),
+                                "fullName" to "${firstName.trim()} ${lastName.trim()}",
+                                "email" to email.trim(),
+                                "phone" to phone.trim(),
+                                "dob" to dob.trim(),
+                                "address" to address.trim(),
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
                         }
 
                         errorMessage = null
@@ -860,10 +917,7 @@ fun EmploymentAndIncomeScreen(
                 }
             }
         }
-        Text("Provide details about your employment status and annual income sources.")
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        InputGuidanceLabel("Select whether you are working Full-time, Part-time, Self-employed, or Contractor.")
         ExposedDropdownMenuBox(
             expanded = isDropdownExpanded && !isReadOnly,
             onExpandedChange = { if (!isReadOnly) isDropdownExpanded = !isDropdownExpanded },
@@ -898,6 +952,7 @@ fun EmploymentAndIncomeScreen(
             }
         }
 
+        InputGuidanceLabel("Enter the official business name of your current employer or your own business if self-employed.")
         OutlinedTextField(
             value = employerName,
             onValueChange = { employerName = it },
@@ -907,6 +962,7 @@ fun EmploymentAndIncomeScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter your professional title or occupational role (e.g., Software Engineer, Teacher, Accountant).")
         OutlinedTextField(
             value = jobTitle,
             onValueChange = { jobTitle = it },
@@ -916,15 +972,17 @@ fun EmploymentAndIncomeScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter how long you have been working with this employer (e.g., 3 years 6 months).")
         OutlinedTextField(
             value = yearsAtEmployer,
             onValueChange = { yearsAtEmployer = it },
-            label = { Text("Time at Current Role (Years / Months)") },
+            label = { Text("Time at Current Role") },
             singleLine = true,
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter your total yearly earnings before tax and deductions (your base salary plus any regular guaranteed allowances).")
         OutlinedTextField(
             value = grossAnnualIncome,
             onValueChange = { grossAnnualIncome = it },
@@ -934,15 +992,17 @@ fun EmploymentAndIncomeScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter any secondary earnings per year, such as rental income, bonuses, overtime, or investment dividends.")
         OutlinedTextField(
             value = additionalIncome,
             onValueChange = { additionalIncome = it },
-            label = { Text("Additional Annual Income (Bonus / Overtime)") },
+            label = { Text("Additional Annual Income") },
             singleLine = true,
             enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter your actual take-home pay received in your bank account each month after tax, social insurance, and pension deductions.")
         OutlinedTextField(
             value = netMonthlyIncome,
             onValueChange = { netMonthlyIncome = it },
@@ -1075,10 +1135,7 @@ fun DebtsAndCommitmentsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("3. Debts & Commitments", onNavigateBack)
-        Text("Declare your existing financial commitments and monthly debt repayments.")
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        InputGuidanceLabel("Enter the combined total credit limit across all active credit cards you hold (even if you pay them off monthly).")
         OutlinedTextField(
             value = creditCardLimit,
             onValueChange = { creditCardLimit = it },
@@ -1087,6 +1144,7 @@ fun DebtsAndCommitmentsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter your total monthly repayments for any active personal loans, car finance, or store cards.")
         OutlinedTextField(
             value = existingLoanRepayment,
             onValueChange = { existingLoanRepayment = it },
@@ -1095,6 +1153,7 @@ fun DebtsAndCommitmentsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter how much you pay each month for your current housing (rent or existing mortgage payment).")
         OutlinedTextField(
             value = rentOrMortgage,
             onValueChange = { rentOrMortgage = it },
@@ -1103,10 +1162,11 @@ fun DebtsAndCommitmentsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter any recurring monthly expenses such as child maintenance, alimony, or court-ordered payments.")
         OutlinedTextField(
             value = otherMonthlyCommitments,
             onValueChange = { otherMonthlyCommitments = it },
-            label = { Text("Other Monthly Expenses (Childcare, Alimony, etc.)") },
+            label = { Text("Other Monthly Expenses") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -1229,10 +1289,7 @@ fun DepositAndAssetsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("4. Deposit & Assets", onNavigateBack)
-        Text("Provide details on your deposit source and overall asset value.")
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        InputGuidanceLabel("Enter the total cash savings or gift funds you have ready to put toward purchasing the property.")
         OutlinedTextField(
             value = depositAmount,
             onValueChange = { depositAmount = it },
@@ -1241,6 +1298,7 @@ fun DepositAndAssetsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Select where your deposit money comes from (e.g., Personal Savings, Family Gift, Equity release).")
         ExposedDropdownMenuBox(
             expanded = isDropdownExpanded,
             onExpandedChange = { isDropdownExpanded = !isDropdownExpanded },
@@ -1274,6 +1332,7 @@ fun DepositAndAssetsScreen(
             }
         }
 
+        InputGuidanceLabel("Enter the estimated total value of other assets you own, such as other properties, vehicles, or investments.")
         OutlinedTextField(
             value = assetsValue,
             onValueChange = { assetsValue = it },
@@ -1282,6 +1341,7 @@ fun DepositAndAssetsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter the name of your main banking institution where your salary is deposited and savings are kept.")
         OutlinedTextField(
             value = primaryBank,
             onValueChange = { primaryBank = it },
@@ -1444,15 +1504,10 @@ fun LoanRequestScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("5. Loan Request ($applicationType)", onNavigateBack)
-        Text(
-            text = if (applicationType == "HELOC") "Specify your HELOC revolving line of credit limit and home equity details."
-            else "Specify your requested mortgage loan amount, term, and rate preference.",
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         if (applicationType == "HELOC") {
+            InputGuidanceLabel(" Enter the remaining balance owed on your current primary mortgage.")
             OutlinedTextField(
                 value = existingFirstMortgageBalance,
                 onValueChange = { existingFirstMortgageBalance = it },
@@ -1461,6 +1516,7 @@ fun LoanRequestScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            InputGuidanceLabel("Enter the difference between your home's market value and your existing mortgage balance.")
             OutlinedTextField(
                 value = estimatedHomeEquity,
                 onValueChange = { estimatedHomeEquity = it },
@@ -1469,6 +1525,7 @@ fun LoanRequestScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            InputGuidanceLabel("Enter the maximum revolving line of credit amount you wish to draw against your home equity.")
             OutlinedTextField(
                 value = requestedCreditLimit,
                 onValueChange = { requestedCreditLimit = it },
@@ -1477,6 +1534,7 @@ fun LoanRequestScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            InputGuidanceLabel("Select your preferred draw period duration.")
             ExposedDropdownMenuBox(
                 expanded = isDrawPeriodExpanded,
                 onExpandedChange = { isDrawPeriodExpanded = !isDrawPeriodExpanded },
@@ -1510,6 +1568,7 @@ fun LoanRequestScreen(
                 }
             }
         } else {
+            InputGuidanceLabel("Enter the total sum of money you need to borrow from the lender to purchase the property.")
             OutlinedTextField(
                 value = loanAmount,
                 onValueChange = { loanAmount = it },
@@ -1518,6 +1577,7 @@ fun LoanRequestScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            InputGuidanceLabel("Select why you are taking out this loan (e.g., Purchasing a new home, Refinancing, Home Improvement).")
             ExposedDropdownMenuBox(
                 expanded = isPurposeExpanded,
                 onExpandedChange = { isPurposeExpanded = !isPurposeExpanded },
@@ -1551,6 +1611,7 @@ fun LoanRequestScreen(
                 }
             }
 
+            InputGuidanceLabel("Enter how many years you want the loan repayment period to last (e.g., 25 or 30 years).")
             OutlinedTextField(
                 value = loanTermYears,
                 onValueChange = { loanTermYears = it },
@@ -1559,6 +1620,7 @@ fun LoanRequestScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            InputGuidanceLabel("Choose whether you want a Fixed interest rate (stable payments) or Variable rate (fluctuates with market).")
             ExposedDropdownMenuBox(
                 expanded = isRateExpanded,
                 onExpandedChange = { isRateExpanded = !isRateExpanded },
@@ -1751,14 +1813,9 @@ fun PropertyDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("6. Property Details ($applicationType)", onNavigateBack)
-        Text(
-            text = if (applicationType == "HELOC") "Provide details for the property collateral securing your HELOC line of credit."
-            else "Enter the estimated property valuation, type, and location details.",
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Spacer(modifier = Modifier.height(4.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
-
+        InputGuidanceLabel("Enter the agreed purchase price or independent professional valuation of the property.")
         OutlinedTextField(
             value = purchasePrice,
             onValueChange = { purchasePrice = it },
@@ -1767,15 +1824,17 @@ fun PropertyDetailsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        InputGuidanceLabel("Enter the exact street address and location of the property you are purchasing or securing.")
         OutlinedTextField(
             value = propertyAddress,
             onValueChange = { propertyAddress = it },
-            label = { Text("Property Address / Location") },
+            label = { Text("Property Address") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
 
         if (applicationType == "HELOC") {
+            InputGuidanceLabel("Enter the name of the financial institution holding your first mortgage.")
             OutlinedTextField(
                 value = existingMortgageLender,
                 onValueChange = { existingMortgageLender = it },
@@ -1785,6 +1844,7 @@ fun PropertyDetailsScreen(
             )
         }
 
+        InputGuidanceLabel("Select the physical building style (e.g., Detached House, Apartment, Townhouse).")
         ExposedDropdownMenuBox(
             expanded = isTypeExpanded,
             onExpandedChange = { isTypeExpanded = !isTypeExpanded },
@@ -1819,6 +1879,7 @@ fun PropertyDetailsScreen(
         }
 
         if (applicationType == "Mortgage") {
+            InputGuidanceLabel("Choose whether you will live in the property as your Primary Residence or rent it out as an Investment.")
             ExposedDropdownMenuBox(
                 expanded = isOccupancyExpanded,
                 onExpandedChange = { isOccupancyExpanded = !isOccupancyExpanded },
@@ -1951,9 +2012,9 @@ fun DocumentUploadScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("7. Document Upload", onNavigateBack)
-        Text("Upload required verification documents for your application.")
+        InputGuidanceLabel("Tap upload to take a clear photo using your camera or select an image from your gallery for each required document.")
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -2174,16 +2235,16 @@ fun ConsentAndDeclarationsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "🔒 Application Submitted — Status: Applied. Your application is under review and cannot be edited.",
+                        text = "Application Submitted. Your application is under review and cannot be edited.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
         }
-        Text("Please review and confirm all mandatory consents to submit your application.")
+        InputGuidanceLabel("Read each declaration carefully, check the boxes to consent, and provide your digital signature below.")
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -2290,7 +2351,7 @@ fun ConsentAndDeclarationsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "🎉 Application Submitted Successfully! Status set to Applied.",
+                    text = "Application Submitted Successfully!",
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodyLarge
@@ -2625,7 +2686,7 @@ private fun ReviewSectionCard(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = if (isComplete) "Complete ✅" else "Action Required 🔴",
+                        text = if (isComplete) "Complete" else "Action Required",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isComplete) Color(0xFF43A047) else Color(0xFFE53935),
                         fontWeight = FontWeight.Bold,

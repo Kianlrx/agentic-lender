@@ -47,6 +47,22 @@ fun CreateProfileScreen(
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
 
+    val currentUser = FirebaseAuth.getInstance().currentUser
+
+    androidx.compose.runtime.LaunchedEffect(currentUser?.uid) {
+        currentUser?.uid?.let { uid ->
+            FirebaseFirestore.getInstance().collection("users").document(uid).get()
+                .addOnSuccessListener { doc ->
+                    if (doc.exists()) {
+                        phone = doc.getString("phone") ?: phone
+                        dob = doc.getString("dob") ?: dob
+                        address = doc.getString("address") ?: address
+                        employmentStatus = doc.getString("employmentStatus") ?: employmentStatus
+                    }
+                }
+        }
+    }
+
     val employmentOptions = listOf(
         "Full-time Employed",
         "Part-time Employed",

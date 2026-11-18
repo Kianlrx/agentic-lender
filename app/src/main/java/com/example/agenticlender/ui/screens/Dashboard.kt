@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.HomeWork
 import androidx.compose.material.icons.filled.Person
@@ -61,15 +62,15 @@ import com.google.firebase.firestore.Query
 import java.util.Locale
 
 // All possible loan application stages and their badge colors
-enum class AppWorkflowStatus(val label: String, val color: Color) {
-    DRAFT("Draft", Color(0xFF757575)),
-    APPLIED("Applied", Color(0xFF1E88E5)),
-    AI_DELIBERATE("AI Deliberate", Color(0xFF8E24AA)),
-    CONDITIONALLY_APPROVED("Conditionally Approved", Color(0xFFFB8C00)),
-    UNDERWRITER_APPROVED("Underwriter Approved", Color(0xFF0288D1)),
-    FINAL_APPROVAL("Final Approval", Color(0xFF43A047)),
-    CLOSED("Closed", Color(0xFF2E7D32)),
-    DECLINED("Declined", Color(0xFFE53935))
+enum class AppWorkflowStatus(val label: String, val color: Color, val description: String) {
+    DRAFT("Draft", Color(0xFF757575), "Application is being prepared."),
+    APPLIED("Applied", Color(0xFF1E88E5), "Application has been submitted."),
+    AI_DELIBERATE("AI Deliberate", Color(0xFF8E24AA), "AI has reviewed the application."),
+    CONDITIONALLY_APPROVED("Conditionally Approved", Color(0xFFFB8C00), "Loan parameters are approved, but additional documents are required for full approval."),
+    UNDERWRITER_APPROVED("Underwriter Approved", Color(0xFF0288D1), "Lender has reviewed financial information and has decided that the borrower meets the loan criteria."),
+    FINAL_APPROVAL("Final Approval", Color(0xFF43A047), "All necessary approvals are complete and the loan funds have been disbursed."),
+    CLOSED("Closed", Color(0xFF2E7D32), "Mortgage process is finalised and the borrower is now responsible for making payments."),
+    DECLINED("Declined", Color(0xFFE53935), "Lender has reviewed the application and has chosen not to approve it.")
 }
 
 // Borrower dashboard view showing stats, progress, AI valuation, and broker messages
@@ -94,6 +95,7 @@ fun UserDashboard(
     var applicationType by remember { mutableStateOf("Mortgage") }
     var applicationStatus by remember { mutableStateOf(AppWorkflowStatus.DRAFT) }
     var hasActiveApplication by remember { mutableStateOf(false) }
+    var isSubmitted by remember { mutableStateOf(false) }
     var showActiveAppAlert by remember { mutableStateOf(false) }
 
     var borrowingCapacityText by remember { mutableStateOf("€0.00") }
@@ -228,8 +230,9 @@ fun UserDashboard(
                     if (!appDoc.getString("loanAmount").isNullOrBlank() || !appDoc.getString("requestedCreditLimit").isNullOrBlank()) completedSteps++
                     if (!appDoc.getString("propertyAddress").isNullOrBlank()) completedSteps++
 
-                    val isSubmitted = appDoc.getBoolean("isApplicationSubmitted") == true
-                    if (isSubmitted) {
+                    val submitted = appDoc.getBoolean("isApplicationSubmitted") == true
+                    isSubmitted = submitted || applicationStatus != AppWorkflowStatus.DRAFT
+                    if (submitted) {
                         completedSteps = 8
                         progressVal = 1.0f
                         if (applicationStatus == AppWorkflowStatus.DRAFT) {
@@ -367,31 +370,72 @@ fun UserDashboard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Application Status",
+                        text = if (isSubmitted) "Application Review Process" else "Application Status",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
 
-                    Text(
-                        text = "${(progressVal * 100).toInt()}% Complete",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (!isSubmitted) {
+                        Text(
+                            text = "${(progressVal * 100).toInt()}% Complete",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Surface(
+                            color = applicationStatus.color.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = applicationStatus.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = applicationStatus.color,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                LinearProgressIndicator(
-                    progress = { progressVal },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
-                )
+                if (!isSubmitted) {
+                    LinearProgressIndicator(
+                        progress = { progressVal },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Current State: ${applicationStatus.label}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = applicationStatus.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -403,7 +447,7 @@ fun UserDashboard(
                         onClick = onNavigateToApplication,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Open Application Hub")
+                        Text(if (isSubmitted) "View Review Status" else "Open Application Hub")
                     }
 
                     OutlinedButton(
