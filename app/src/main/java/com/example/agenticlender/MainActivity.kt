@@ -7,13 +7,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -28,7 +32,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AgenticLenderTheme {
+            AgenticLenderTheme(darkTheme = com.example.agenticlender.ui.theme.ThemeState.isDarkTheme.value) {
                 MainFunction()
             }
         }
@@ -56,7 +60,10 @@ fun MainFunction(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 8.dp
+                ) {
                     navItems.forEach { item ->
                         val isSelected = currentRoute == item.route
                         NavigationBarItem(
@@ -78,7 +85,19 @@ fun MainFunction(modifier: Modifier = Modifier) {
                                     contentDescription = item.label
                                 )
                             },
-                            label = { Text(item.label) }
+                            label = {
+                                Text(
+                                    text = item.label,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
                     }
                 }
@@ -210,6 +229,7 @@ fun MainFunction(modifier: Modifier = Modifier) {
             composable(Screen.MoreScreen.route) {
                 MoreScreen(
                     onNavigateToProfile = { navController.navigate(Screen.ProfileScreen.route) },
+                    onNavigateToDocuments = { navController.navigate(Screen.DocumentsScreen.route) },
                     onNavigateToSettings = { navController.navigate(Screen.SettingsScreen.route) },
                     onNavigateToHelp = { navController.navigate(Screen.HelpScreen.route) },
                     onNavigateToPayment = { navController.navigate(Screen.PaymentScreen.route) },

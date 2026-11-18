@@ -219,13 +219,24 @@ fun UserDashboard(
                     val appRef = appDoc.getString("applicationId") ?: "APP-${uid.take(6).uppercase()}"
                     loanNoteRef = "LOAN-NOTE-$appRef"
 
-                    if (appDoc.getBoolean("isApplicationSubmitted") == true) {
-                        progressVal = 0.85f
+                    // Connect progress bar directly to completed application steps
+                    var completedSteps = 0
+                    if (!appDoc.getString("firstName").isNullOrBlank()) completedSteps++
+                    if (!appDoc.getString("employerName").isNullOrBlank()) completedSteps++
+                    if (!appDoc.getString("rentOrMortgage").isNullOrBlank()) completedSteps++
+                    if (!appDoc.getString("primaryBank").isNullOrBlank()) completedSteps++
+                    if (!appDoc.getString("loanAmount").isNullOrBlank() || !appDoc.getString("requestedCreditLimit").isNullOrBlank()) completedSteps++
+                    if (!appDoc.getString("propertyAddress").isNullOrBlank()) completedSteps++
+
+                    val isSubmitted = appDoc.getBoolean("isApplicationSubmitted") == true
+                    if (isSubmitted) {
+                        completedSteps = 8
+                        progressVal = 1.0f
                         if (applicationStatus == AppWorkflowStatus.DRAFT) {
                             applicationStatus = AppWorkflowStatus.APPLIED
                         }
                     } else {
-                        progressVal = 0.35f
+                        progressVal = completedSteps.toFloat() / 8.0f
                     }
 
                     // Check for missing or rejected documents to highlight on dashboard

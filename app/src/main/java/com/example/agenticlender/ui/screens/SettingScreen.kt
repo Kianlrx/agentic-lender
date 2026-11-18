@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.agenticlender.ui.theme.ThemeState
 
 // App settings and security preferences screen
 @Composable
@@ -37,7 +38,7 @@ fun SettingsScreen(
     var smsUpdates by remember { mutableStateOf(false) }
     var biometricLogin by remember { mutableStateOf(true) }
     var twoFactorAuth by remember { mutableStateOf(true) }
-    var darkTheme by remember { mutableStateOf(false) }
+    var darkTheme by remember { mutableStateOf(ThemeState.isDarkTheme.value) }
 
     Column(
         modifier = Modifier
@@ -208,10 +209,20 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Dark Theme", style = MaterialTheme.typography.bodyLarge)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Dark Theme", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Toggle deep black and bright blue dark theme",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Switch(
                         checked = darkTheme,
-                        onCheckedChange = { darkTheme = it }
+                        onCheckedChange = { isChecked ->
+                            darkTheme = isChecked
+                            ThemeState.isDarkTheme.value = isChecked
+                        }
                     )
                 }
             }

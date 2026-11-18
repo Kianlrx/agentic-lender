@@ -21,7 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -55,6 +55,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 @Composable
 fun MoreScreen(
     onNavigateToProfile: () -> Unit = {},
+    onNavigateToDocuments: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToPayment: () -> Unit = {},
@@ -106,7 +107,7 @@ fun MoreScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
-        // User profile header card
+        // User profile header card (clicking opens ProfileScreen)
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -179,10 +180,10 @@ fun MoreScreen(
         ) {
             Column {
                 MoreMenuItem(
-                    icon = Icons.Default.Person,
-                    title = "My Profile",
-                    subtitle = "Personal details, address & contact info",
-                    onClick = onNavigateToProfile
+                    icon = Icons.Default.Folder,
+                    title = "Documents Hub",
+                    subtitle = "Upload & track verification documents",
+                    onClick = onNavigateToDocuments
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 MoreMenuItem(

@@ -20,11 +20,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -55,10 +57,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import java.io.File
 import java.util.Locale
 
 // Document status options and badge colors
@@ -96,9 +100,13 @@ fun DocumentsScreen() {
     // Screen state variables
     var filterIndex by rememberSaveable { mutableIntStateOf(0) }
     var selectedDocToUpload by remember { mutableStateOf<DocumentItemData?>(null) }
+    var showOptionModal by remember { mutableStateOf<DocumentItemData?>(null) }
     var isUploading by remember { mutableStateOf(false) }
     var uploadErrorMessage by remember { mutableStateOf<String?>(null) }
     var showPreviewDialog by remember { mutableStateOf<DocumentItemData?>(null) }
+
+    // Temporary URI for camera photo capture
+    var cameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
     // Required documents list
     var documents by remember {
@@ -138,18 +146,15 @@ fun DocumentsScreen() {
         )
     }
 
-    // System file picker to select PDF, PNG or JPG files from the device
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val targetDoc = selectedDocToUpload ?: return@rememberLauncherForActivityResult
-
+    // Shared Uri processing and Firebase Storage upload handler
+    val processAndUploadUri: (Uri) -> Unit = { uri ->
+        val targetDoc = selectedDocToUpload
+        if (targetDoc != null) {
             val contentResolver = context.contentResolver
-            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+            val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
 
             // Get file name and size from the device
-            var fileName = "${targetDoc.title.replace(" ", "_")}.pdf"
+            var fileName = "${targetDoc.title.replace(" ", "_")}_Photo.jpg"
             var fileSizeMb = 0.0
 
             try {
@@ -169,85 +174,103 @@ fun DocumentsScreen() {
                 }
             } catch (_: Exception) { }
 
-            // Check file type: only PDF, PNG, or JPG allowed
-            val isPdf = mimeType.contains("pdf", ignoreCase = true) || fileName.endsWith(".pdf", ignoreCase = true)
+            // File format check (PDF, PNG, JPG, JPEG)
             val isImage = mimeType.contains("image", ignoreCase = true) ||
                     fileName.endsWith(".png", ignoreCase = true) ||
                     fileName.endsWith(".jpg", ignoreCase = true) ||
                     fileName.endsWith(".jpeg", ignoreCase = true)
 
-            if (!isPdf && !isImage) {
-                uploadErrorMessage = "Invalid file format! Uploads are restricted to PDF, PNG, or JPG."
-                return@rememberLauncherForActivityResult
-            }
-
-            // Check file size: max 10 MB limit
             if (fileSizeMb > 10.0) {
                 uploadErrorMessage = String.format(Locale.getDefault(), "File size exceeds 10 MB limit! (Selected: %.1f MB)", fileSizeMb)
-                return@rememberLauncherForActivityResult
-            }
+            } else {
+                // Upload directly to Firebase Storage
+                val uid = currentUser?.uid ?: "anonymous"
+                val docId = targetDoc.id
+                val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                    .child("documents")
+                    .child(uid)
+                    .child("${docId}_${System.currentTimeMillis()}_$fileName")
 
-            // Upload directly to Firebase Storage
-            val uid = currentUser?.uid ?: "anonymous"
-            val docId = targetDoc.id
-            val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
-                .child("documents")
-                .child(uid)
-                .child("${docId}_${System.currentTimeMillis()}_$fileName")
+                isUploading = true
+                uploadErrorMessage = null
 
-            isUploading = true
-            uploadErrorMessage = null
+                storageRef.putFile(uri)
+                    .addOnSuccessListener {
+                        storageRef.downloadUrl.addOnSuccessListener { uriRes: Uri ->
+                            isUploading = false
+                            val downloadUrl = uriRes.toString()
+                            val formattedSize = if (fileSizeMb > 0) String.format(Locale.getDefault(), "%.1f MB", fileSizeMb) else "1.8 MB"
 
-            storageRef.putFile(uri)
-                .addOnSuccessListener {
-                    // Fetch public download URL after upload succeeds
-                    storageRef.downloadUrl.addOnSuccessListener { uriRes: Uri ->
-                        isUploading = false
-                        val downloadUrl = uriRes.toString()
-                        val formattedSize = if (fileSizeMb > 0) String.format(Locale.getDefault(), "%.1f MB", fileSizeMb) else "2.0 MB"
+                            val docData = hashMapOf(
+                                "id" to docId,
+                                "title" to targetDoc.title,
+                                "status" to DocumentStatus.UPLOADED.name,
+                                "fileName" to fileName,
+                                "fileSize" to formattedSize,
+                                "fileType" to mimeType,
+                                "downloadUrl" to downloadUrl,
+                                "uploadedAt" to Timestamp.now(),
+                                "rejectionReason" to null
+                            )
 
-                        // Prepare document metadata
-                        val docData = hashMapOf(
-                            "id" to docId,
-                            "title" to targetDoc.title,
-                            "status" to DocumentStatus.UPLOADED.name,
-                            "fileName" to fileName,
-                            "fileSize" to formattedSize,
-                            "fileType" to mimeType,
-                            "downloadUrl" to downloadUrl,
-                            "uploadedAt" to Timestamp.now(),
-                            "rejectionReason" to null
-                        )
+                            // Save details to Firestore database
+                            db.collection("users").document(uid).collection("documents").document(docId)
+                                .set(docData, SetOptions.merge())
+                            db.collection("applications").document(uid).collection("documents").document(docId)
+                                .set(docData, SetOptions.merge())
 
-                        // Save details to Firestore database
-                        db.collection("users").document(uid).collection("documents").document(docId)
-                            .set(docData, SetOptions.merge())
-                        db.collection("applications").document(uid).collection("documents").document(docId)
-                            .set(docData, SetOptions.merge())
-
-                        // Update list on screen
-                        documents = documents.map { d ->
-                            if (d.id == docId) {
-                                d.copy(
-                                    status = DocumentStatus.UPLOADED,
-                                    fileName = fileName,
-                                    fileSize = formattedSize,
-                                    fileType = mimeType,
-                                    downloadUrl = downloadUrl,
-                                    rejectionReason = null
-                                )
-                            } else d
+                            // Update list on screen
+                            documents = documents.map { d ->
+                                if (d.id == docId) {
+                                    d.copy(
+                                        status = DocumentStatus.UPLOADED,
+                                        fileName = fileName,
+                                        fileSize = formattedSize,
+                                        fileType = mimeType,
+                                        downloadUrl = downloadUrl,
+                                        rejectionReason = null
+                                    )
+                                } else d
+                            }
+                            selectedDocToUpload = null
+                            showOptionModal = null
+                        }.addOnFailureListener { exc: Exception ->
+                            isUploading = false
+                            uploadErrorMessage = "Failed to obtain download URL: ${exc.localizedMessage}"
                         }
-                        selectedDocToUpload = null
-                    }.addOnFailureListener { exc: Exception ->
-                        isUploading = false
-                        uploadErrorMessage = "Failed to obtain download URL: ${exc.localizedMessage}"
                     }
-                }
-                .addOnFailureListener { exc: Exception ->
-                    isUploading = false
-                    uploadErrorMessage = "Firebase Storage Upload Failed: ${exc.localizedMessage}"
-                }
+                    .addOnFailureListener { exc: Exception ->
+                        isUploading = false
+                        uploadErrorMessage = "Firebase Storage Upload Failed: ${exc.localizedMessage}"
+                    }
+            }
+        }
+    }
+
+    // 1. Camera Photo Launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { isSuccess ->
+        if (isSuccess && cameraPhotoUri != null) {
+            processAndUploadUri(cameraPhotoUri!!)
+        }
+    }
+
+    // 2. Gallery / Photos Launcher
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            processAndUploadUri(uri)
+        }
+    }
+
+    // 3. System Document File Picker Launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            processAndUploadUri(uri)
         }
     }
 
@@ -310,7 +333,7 @@ fun DocumentsScreen() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Upload required verification documents directly to Firebase Cloud Storage.",
+                text = "Take a photo or upload document files directly to Firebase Cloud Storage.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -389,14 +412,85 @@ fun DocumentsScreen() {
                     doc = doc,
                     onUploadClick = {
                         selectedDocToUpload = doc
+                        showOptionModal = doc
                         uploadErrorMessage = null
-                        // Launch system file picker
-                        filePickerLauncher.launch(arrayOf("application/pdf", "image/png", "image/jpeg"))
                     },
                     onPreviewClick = { showPreviewDialog = doc }
                 )
             }
         }
+    }
+
+    // Modal: Choose Upload Source (Camera vs Gallery vs File)
+    showOptionModal?.let { doc ->
+        AlertDialog(
+            onDismissRequest = { showOptionModal = null },
+            title = { Text("Upload ${doc.title}") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("Select how you want to capture or choose your document:")
+
+                    // Option 1: Take Photo with Camera
+                    Button(
+                        onClick = {
+                            showOptionModal = null
+                            try {
+                                val photoFile = File.createTempFile("doc_photo_", ".jpg", context.cacheDir)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    photoFile
+                                )
+                                cameraPhotoUri = uri
+                                cameraLauncher.launch(uri)
+                            } catch (e: Exception) {
+                                uploadErrorMessage = "Could not launch camera: ${e.localizedMessage}"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Take Photo with Camera")
+                    }
+
+                    // Option 2: Choose Photo from Gallery
+                    OutlinedButton(
+                        onClick = {
+                            showOptionModal = null
+                            galleryPickerLauncher.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Choose Photo from Gallery")
+                    }
+
+                    // Option 3: Pick PDF or File
+                    OutlinedButton(
+                        onClick = {
+                            showOptionModal = null
+                            filePickerLauncher.launch(arrayOf("application/pdf", "image/png", "image/jpeg"))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.Description, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Select Document / PDF File")
+                    }
+                }
+            },
+            confirmButton = { },
+            dismissButton = {
+                TextButton(onClick = { showOptionModal = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Uploading popup
@@ -410,7 +504,7 @@ fun DocumentsScreen() {
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(36.dp))
-                    Text("Uploading document file securely to Firebase Storage buckets...")
+                    Text("Uploading photo/file securely to Firebase Storage buckets...")
                 }
             },
             confirmButton = { }

@@ -122,8 +122,28 @@ fun ApplicationScreen(
                         if (!doc.getString("primaryBank").isNullOrBlank()) step4Status = StepStatus.COMPLETED
                         if (!doc.getString("loanAmount").isNullOrBlank() || !doc.getString("requestedCreditLimit").isNullOrBlank()) step5Status = StepStatus.COMPLETED
                         if (!doc.getString("propertyAddress").isNullOrBlank()) step6Status = StepStatus.COMPLETED
-                        step7Status = StepStatus.IN_PROGRESS
-                        if (doc.getBoolean("isApplicationSubmitted") == true) step8Status = StepStatus.COMPLETED
+                        
+                        val isPassportUploaded = doc.getBoolean("isPassportUploaded") == true
+                        val isPayslipUploaded = doc.getBoolean("isPayslipUploaded") == true
+                        if (isPassportUploaded || isPayslipUploaded) {
+                            step7Status = StepStatus.COMPLETED
+                        }
+                        
+                        if (doc.getBoolean("isApplicationSubmitted") == true) {
+                            step7Status = StepStatus.COMPLETED
+                            step8Status = StepStatus.COMPLETED
+                        }
+                    }
+                }
+
+            db.collection("users").document(uid).collection("documents").get()
+                .addOnSuccessListener { snap ->
+                    if (snap != null && !snap.isEmpty) {
+                        val uploaded = snap.documents.any {
+                            val st = it.getString("status") ?: ""
+                            st == "UPLOADED" || st == "VERIFIED"
+                        }
+                        if (uploaded) step7Status = StepStatus.COMPLETED
                     }
                 }
         }
@@ -437,6 +457,7 @@ fun PersonalDetailsScreen(
 
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var successMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isReadOnly by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
@@ -454,6 +475,7 @@ fun PersonalDetailsScreen(
             db.collection("applications").document(uid).get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
+                        isReadOnly = doc.getBoolean("isApplicationSubmitted") == true
                         firstName = doc.getString("firstName") ?: firstName
                         lastName = doc.getString("lastName") ?: lastName
                         dob = doc.getString("dob") ?: dob
@@ -484,6 +506,32 @@ fun PersonalDetailsScreen(
             title = "1. Personal Details",
             onNavigateBack = onNavigateBack
         )
+        if (isReadOnly) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Read Only",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Application Submitted — Read-Only Mode. This section cannot be modified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
+
         Text(
             text = "Please provide your personal, contact, and household information.",
             style = MaterialTheme.typography.bodyMedium
@@ -496,6 +544,7 @@ fun PersonalDetailsScreen(
             onValueChange = { firstName = it },
             label = { Text("First Name") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -503,6 +552,7 @@ fun PersonalDetailsScreen(
             onValueChange = { lastName = it },
             label = { Text("Last Name") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -510,6 +560,7 @@ fun PersonalDetailsScreen(
             onValueChange = { dob = it },
             label = { Text("Date of Birth (DD/MM/YYYY)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -517,6 +568,7 @@ fun PersonalDetailsScreen(
             onValueChange = { phone = it },
             label = { Text("Phone Number") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -524,6 +576,7 @@ fun PersonalDetailsScreen(
             onValueChange = { email = it },
             label = { Text("Email Address") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -531,6 +584,7 @@ fun PersonalDetailsScreen(
             onValueChange = { address = it },
             label = { Text("Home Address") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -538,6 +592,7 @@ fun PersonalDetailsScreen(
             onValueChange = { householdStatus = it },
             label = { Text("Household Status (e.g., Homeowner, Renter)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -545,6 +600,7 @@ fun PersonalDetailsScreen(
             onValueChange = { dependants = it },
             label = { Text("Number of Dependants") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -558,7 +614,8 @@ fun PersonalDetailsScreen(
             Text(text = "Is this a Joint Application?", style = MaterialTheme.typography.bodyLarge)
             Switch(
                 checked = isJointApplication,
-                onCheckedChange = { isJointApplication = it }
+                onCheckedChange = { isJointApplication = it },
+                enabled = !isReadOnly
             )
         }
 
@@ -634,78 +691,87 @@ fun PersonalDetailsScreen(
             ) {
                 Text("Back")
             }
-            OutlinedButton(
-                onClick = {
-                    currentUser?.uid?.let { uid ->
-                        val data = hashMapOf(
-                            "firstName" to firstName.trim(),
-                            "lastName" to lastName.trim(),
-                            "dob" to dob.trim(),
-                            "phone" to phone.trim(),
-                            "email" to email.trim(),
-                            "address" to address.trim(),
-                            "householdStatus" to householdStatus.trim(),
-                            "dependants" to dependants.trim(),
-                            "isJointApplication" to isJointApplication,
-                            "coFirstName" to coFirstName.trim(),
-                            "coLastName" to coLastName.trim(),
-                            "coEmail" to coEmail.trim(),
-                            "coPhone" to coPhone.trim(),
-                            "coDob" to coDob.trim(),
-                            "status" to "Draft",
-                            "updatedAt" to Timestamp.now()
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                    }
-                    errorMessage = null
-                    successMessage = "Draft Saved Successfully ✅"
-                },
-                modifier = Modifier.weight(1.1f)
-            ) {
-                Text("Save Draft")
-            }
-            Button(
-                onClick = {
-                    if (firstName.isBlank() || lastName.isBlank() || dob.isBlank() || phone.isBlank() || email.isBlank() || address.isBlank() || householdStatus.isBlank() || dependants.isBlank()) {
-                        errorMessage = "Please fill in all required personal and household fields."
-                        successMessage = null
-                        return@Button
-                    }
-                    if (isJointApplication && (coFirstName.isBlank() || coLastName.isBlank() || coDob.isBlank() || coPhone.isBlank() || coEmail.isBlank())) {
-                        errorMessage = "Please fill in all required co-applicant fields for a joint application."
-                        successMessage = null
-                        return@Button
-                    }
+            if (!isReadOnly) {
+                OutlinedButton(
+                    onClick = {
+                        currentUser?.uid?.let { uid ->
+                            val data = hashMapOf(
+                                "firstName" to firstName.trim(),
+                                "lastName" to lastName.trim(),
+                                "dob" to dob.trim(),
+                                "phone" to phone.trim(),
+                                "email" to email.trim(),
+                                "address" to address.trim(),
+                                "householdStatus" to householdStatus.trim(),
+                                "dependants" to dependants.trim(),
+                                "isJointApplication" to isJointApplication,
+                                "coFirstName" to coFirstName.trim(),
+                                "coLastName" to coLastName.trim(),
+                                "coEmail" to coEmail.trim(),
+                                "coPhone" to coPhone.trim(),
+                                "coDob" to coDob.trim(),
+                                "status" to "Draft",
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                        }
+                        errorMessage = null
+                        successMessage = "Draft Saved Successfully ✅"
+                    },
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text("Save Draft")
+                }
+                Button(
+                    onClick = {
+                        if (firstName.isBlank() || lastName.isBlank() || dob.isBlank() || phone.isBlank() || email.isBlank() || address.isBlank() || householdStatus.isBlank() || dependants.isBlank()) {
+                            errorMessage = "Please fill in all required personal and household fields."
+                            successMessage = null
+                            return@Button
+                        }
+                        if (isJointApplication && (coFirstName.isBlank() || coLastName.isBlank() || coDob.isBlank() || coPhone.isBlank() || coEmail.isBlank())) {
+                            errorMessage = "Please fill in all required co-applicant fields for a joint application."
+                            successMessage = null
+                            return@Button
+                        }
 
-                    currentUser?.uid?.let { uid ->
-                        val data = hashMapOf(
-                            "firstName" to firstName.trim(),
-                            "lastName" to lastName.trim(),
-                            "dob" to dob.trim(),
-                            "phone" to phone.trim(),
-                            "email" to email.trim(),
-                            "address" to address.trim(),
-                            "householdStatus" to householdStatus.trim(),
-                            "dependants" to dependants.trim(),
-                            "isJointApplication" to isJointApplication,
-                            "coFirstName" to coFirstName.trim(),
-                            "coLastName" to coLastName.trim(),
-                            "coEmail" to coEmail.trim(),
-                            "coPhone" to coPhone.trim(),
-                            "coDob" to coDob.trim(),
-                            "status" to "Draft",
-                            "updatedAt" to Timestamp.now()
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                    }
+                        currentUser?.uid?.let { uid ->
+                            val data = hashMapOf(
+                                "firstName" to firstName.trim(),
+                                "lastName" to lastName.trim(),
+                                "dob" to dob.trim(),
+                                "phone" to phone.trim(),
+                                "email" to email.trim(),
+                                "address" to address.trim(),
+                                "householdStatus" to householdStatus.trim(),
+                                "dependants" to dependants.trim(),
+                                "isJointApplication" to isJointApplication,
+                                "coFirstName" to coFirstName.trim(),
+                                "coLastName" to coLastName.trim(),
+                                "coEmail" to coEmail.trim(),
+                                "coPhone" to coPhone.trim(),
+                                "coDob" to coDob.trim(),
+                                "status" to "Draft",
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                        }
 
-                    errorMessage = null
-                    successMessage = "Personal details saved successfully!"
-                    onNavigateNext()
-                },
-                modifier = Modifier.weight(1.2f)
-            ) {
-                Text("Save & Continue")
+                        errorMessage = null
+                        successMessage = "Personal details saved successfully!"
+                        onNavigateNext()
+                    },
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text("Save & Continue")
+                }
+            } else {
+                Button(
+                    onClick = onNavigateNext,
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text("Next Step")
+                }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -732,6 +798,7 @@ fun EmploymentAndIncomeScreen(
 
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isReadOnly by rememberSaveable { mutableStateOf(false) }
 
     val employmentOptions = listOf(
         "Full-time Employed",
@@ -747,6 +814,7 @@ fun EmploymentAndIncomeScreen(
             db.collection("applications").document(uid).get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
+                        isReadOnly = doc.getBoolean("isApplicationSubmitted") == true
                         employerName = doc.getString("employerName") ?: employerName
                         jobTitle = doc.getString("jobTitle") ?: jobTitle
                         employmentType = doc.getString("employmentType") ?: employmentType
@@ -767,19 +835,45 @@ fun EmploymentAndIncomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("2. Employment & Income", onNavigateBack)
+        if (isReadOnly) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Read Only",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Application Submitted — Read-Only Mode. This section cannot be modified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
         Text("Provide details about your employment status and annual income sources.")
 
         Spacer(modifier = Modifier.height(8.dp))
 
         ExposedDropdownMenuBox(
-            expanded = isDropdownExpanded,
-            onExpandedChange = { isDropdownExpanded = !isDropdownExpanded },
+            expanded = isDropdownExpanded && !isReadOnly,
+            onExpandedChange = { if (!isReadOnly) isDropdownExpanded = !isDropdownExpanded },
             modifier = Modifier.fillMaxWidth()
         ) {
             OutlinedTextField(
                 value = employmentType,
                 onValueChange = {},
                 readOnly = true,
+                enabled = !isReadOnly,
                 label = { Text("Employment Status") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
@@ -809,6 +903,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { employerName = it },
             label = { Text("Employer / Business Name") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -817,6 +912,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { jobTitle = it },
             label = { Text("Job Title / Occupation") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -825,6 +921,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { yearsAtEmployer = it },
             label = { Text("Time at Current Role (Years / Months)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -833,6 +930,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { grossAnnualIncome = it },
             label = { Text("Gross Annual Base Income (€)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -841,6 +939,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { additionalIncome = it },
             label = { Text("Additional Annual Income (Bonus / Overtime)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -849,6 +948,7 @@ fun EmploymentAndIncomeScreen(
             onValueChange = { netMonthlyIncome = it },
             label = { Text("Net Monthly Take-Home Pay (€)") },
             singleLine = true,
+            enabled = !isReadOnly,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -872,56 +972,65 @@ fun EmploymentAndIncomeScreen(
             ) {
                 Text("Back")
             }
-            OutlinedButton(
-                onClick = {
-                    currentUser?.uid?.let { uid ->
-                        val data = hashMapOf(
-                            "employerName" to employerName.trim(),
-                            "jobTitle" to jobTitle.trim(),
-                            "employmentType" to employmentType.trim(),
-                            "yearsAtEmployer" to yearsAtEmployer.trim(),
-                            "grossAnnualIncome" to grossAnnualIncome.trim(),
-                            "additionalIncome" to additionalIncome.trim(),
-                            "netMonthlyIncome" to netMonthlyIncome.trim(),
-                            "status" to "Draft",
-                            "updatedAt" to Timestamp.now()
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                    }
-                    errorMessage = null
-                },
-                modifier = Modifier.weight(1.1f)
-            ) {
-                Text("Save Draft")
-            }
-            Button(
-                onClick = {
-                    if (employerName.isBlank() || jobTitle.isBlank() || grossAnnualIncome.isBlank() || netMonthlyIncome.isBlank()) {
-                        errorMessage = "Please fill in all employment and income fields."
-                        return@Button
-                    }
+            if (!isReadOnly) {
+                OutlinedButton(
+                    onClick = {
+                        currentUser?.uid?.let { uid ->
+                            val data = hashMapOf(
+                                "employerName" to employerName.trim(),
+                                "jobTitle" to jobTitle.trim(),
+                                "employmentType" to employmentType.trim(),
+                                "yearsAtEmployer" to yearsAtEmployer.trim(),
+                                "grossAnnualIncome" to grossAnnualIncome.trim(),
+                                "additionalIncome" to additionalIncome.trim(),
+                                "netMonthlyIncome" to netMonthlyIncome.trim(),
+                                "status" to "Draft",
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                        }
+                        errorMessage = null
+                    },
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text("Save Draft")
+                }
+                Button(
+                    onClick = {
+                        if (employerName.isBlank() || jobTitle.isBlank() || grossAnnualIncome.isBlank() || netMonthlyIncome.isBlank()) {
+                            errorMessage = "Please fill in all employment and income fields."
+                            return@Button
+                        }
 
-                    currentUser?.uid?.let { uid ->
-                        val data = hashMapOf(
-                            "employerName" to employerName.trim(),
-                            "jobTitle" to jobTitle.trim(),
-                            "employmentType" to employmentType.trim(),
-                            "yearsAtEmployer" to yearsAtEmployer.trim(),
-                            "grossAnnualIncome" to grossAnnualIncome.trim(),
-                            "additionalIncome" to additionalIncome.trim(),
-                            "netMonthlyIncome" to netMonthlyIncome.trim(),
-                            "status" to "Draft",
-                            "updatedAt" to Timestamp.now()
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                    }
+                        currentUser?.uid?.let { uid ->
+                            val data = hashMapOf(
+                                "employerName" to employerName.trim(),
+                                "jobTitle" to jobTitle.trim(),
+                                "employmentType" to employmentType.trim(),
+                                "yearsAtEmployer" to yearsAtEmployer.trim(),
+                                "grossAnnualIncome" to grossAnnualIncome.trim(),
+                                "additionalIncome" to additionalIncome.trim(),
+                                "netMonthlyIncome" to netMonthlyIncome.trim(),
+                                "status" to "Draft",
+                                "updatedAt" to Timestamp.now()
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                        }
 
-                    errorMessage = null
-                    onNavigateNext()
-                },
-                modifier = Modifier.weight(1.2f)
-            ) {
-                Text("Save & Continue")
+                        errorMessage = null
+                        onNavigateNext()
+                    },
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text("Save & Continue")
+                }
+            } else {
+                Button(
+                    onClick = onNavigateNext,
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text("Next Step")
+                }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -2027,6 +2136,7 @@ fun ConsentAndDeclarationsScreen(
             db.collection("applications").document(uid).get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
+                        isSubmitted = doc.getBoolean("isApplicationSubmitted") == true
                         isDataProcessingConsented = doc.getBoolean("consent_dataProcessing") ?: isDataProcessingConsented
                         isCreditCheckConsented = doc.getBoolean("consent_creditCheck") ?: isCreditCheckConsented
                         isValuationConsented = doc.getBoolean("consent_valuation") ?: isValuationConsented
@@ -2046,6 +2156,31 @@ fun ConsentAndDeclarationsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SubScreenHeader("8. Consent & Declarations", onNavigateBack)
+        if (isSubmitted) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Read Only",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "🔒 Application Submitted — Status: Applied. Your application is under review and cannot be edited.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
         Text("Please review and confirm all mandatory consents to submit your application.")
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -2056,7 +2191,8 @@ fun ConsentAndDeclarationsScreen(
         ) {
             Checkbox(
                 checked = isDataProcessingConsented,
-                onCheckedChange = { isDataProcessingConsented = it }
+                onCheckedChange = { isDataProcessingConsented = it },
+                enabled = !isSubmitted
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -2071,7 +2207,8 @@ fun ConsentAndDeclarationsScreen(
         ) {
             Checkbox(
                 checked = isCreditCheckConsented,
-                onCheckedChange = { isCreditCheckConsented = it }
+                onCheckedChange = { isCreditCheckConsented = it },
+                enabled = !isSubmitted
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -2086,7 +2223,8 @@ fun ConsentAndDeclarationsScreen(
         ) {
             Checkbox(
                 checked = isValuationConsented,
-                onCheckedChange = { isValuationConsented = it }
+                onCheckedChange = { isValuationConsented = it },
+                enabled = !isSubmitted
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -2101,7 +2239,8 @@ fun ConsentAndDeclarationsScreen(
         ) {
             Checkbox(
                 checked = isAiAnalysisConsented,
-                onCheckedChange = { isAiAnalysisConsented = it }
+                onCheckedChange = { isAiAnalysisConsented = it },
+                enabled = !isSubmitted
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -2116,7 +2255,8 @@ fun ConsentAndDeclarationsScreen(
         ) {
             Checkbox(
                 checked = isTermsAgreed,
-                onCheckedChange = { isTermsAgreed = it }
+                onCheckedChange = { isTermsAgreed = it },
+                enabled = !isSubmitted
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
@@ -2132,6 +2272,7 @@ fun ConsentAndDeclarationsScreen(
             onValueChange = { signature = it },
             label = { Text("Electronic Signature (Full Legal Name)") },
             singleLine = true,
+            enabled = !isSubmitted,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -2169,62 +2310,83 @@ fun ConsentAndDeclarationsScreen(
             ) {
                 Text("Back")
             }
-            OutlinedButton(
-                onClick = {
-                    currentUser?.uid?.let { uid ->
-                        val now = Timestamp.now()
-                        val data = hashMapOf(
-                            "isApplicationSubmitted" to false,
-                            "status" to "Draft",
-                            "consent_dataProcessing" to isDataProcessingConsented,
-                            "consent_creditCheck" to isCreditCheckConsented,
-                            "consent_valuation" to isValuationConsented,
-                            "consent_aiAnalysis" to isAiAnalysisConsented,
-                            "consent_terms" to isTermsAgreed,
-                            "signature" to signature.trim(),
-                            "updatedAt" to now
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                        db.collection("users").document(uid).set(hashMapOf("applicationStatus" to "Draft"), SetOptions.merge())
-                    }
-                    errorMessage = null
-                },
-                modifier = Modifier.weight(1.1f)
-            ) {
-                Text("Save Draft")
-            }
-            Button(
-                onClick = {
-                    if (!isDataProcessingConsented || !isCreditCheckConsented || !isValuationConsented || !isAiAnalysisConsented || !isTermsAgreed || signature.isBlank()) {
-                        errorMessage = "All 5 mandatory consent options and your electronic signature are required."
-                        return@Button
-                    }
+            if (!isSubmitted) {
+                OutlinedButton(
+                    onClick = {
+                        currentUser?.uid?.let { uid ->
+                            val now = Timestamp.now()
+                            val data = hashMapOf(
+                                "isApplicationSubmitted" to false,
+                                "status" to "Draft",
+                                "consent_dataProcessing" to isDataProcessingConsented,
+                                "consent_creditCheck" to isCreditCheckConsented,
+                                "consent_valuation" to isValuationConsented,
+                                "consent_aiAnalysis" to isAiAnalysisConsented,
+                                "consent_terms" to isTermsAgreed,
+                                "signature" to signature.trim(),
+                                "updatedAt" to now
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                            db.collection("users").document(uid).set(hashMapOf("applicationStatus" to "Draft"), SetOptions.merge())
+                        }
+                        errorMessage = null
+                    },
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text("Save Draft")
+                }
+                Button(
+                    onClick = {
+                        if (!isDataProcessingConsented || !isCreditCheckConsented || !isValuationConsented || !isAiAnalysisConsented || !isTermsAgreed || signature.isBlank()) {
+                            errorMessage = "All 5 mandatory consent options and your electronic signature are required."
+                            return@Button
+                        }
 
-                    currentUser?.uid?.let { uid ->
-                        val now = Timestamp.now()
-                        val data = hashMapOf(
-                            "isApplicationSubmitted" to true,
-                            "status" to "Applied",
-                            "consent_dataProcessing" to isDataProcessingConsented,
-                            "consent_creditCheck" to isCreditCheckConsented,
-                            "consent_valuation" to isValuationConsented,
-                            "consent_aiAnalysis" to isAiAnalysisConsented,
-                            "consent_terms" to isTermsAgreed,
-                            "signature" to signature.trim(),
-                            "submittedAt" to now,
-                            "updatedAt" to now
-                        )
-                        db.collection("applications").document(uid).set(data, SetOptions.merge())
-                        db.collection("users").document(uid).set(hashMapOf("applicationStatus" to "Applied"), SetOptions.merge())
-                    }
+                        currentUser?.uid?.let { uid ->
+                            val now = Timestamp.now()
+                            val data = hashMapOf(
+                                "isApplicationSubmitted" to true,
+                                "status" to "Applied",
+                                "consent_dataProcessing" to isDataProcessingConsented,
+                                "consent_creditCheck" to isCreditCheckConsented,
+                                "consent_valuation" to isValuationConsented,
+                                "consent_aiAnalysis" to isAiAnalysisConsented,
+                                "consent_terms" to isTermsAgreed,
+                                "signature" to signature.trim(),
+                                "submittedAt" to now,
+                                "updatedAt" to now
+                            )
+                            db.collection("applications").document(uid).set(data, SetOptions.merge())
+                            db.collection("users").document(uid).set(hashMapOf("applicationStatus" to "Applied"), SetOptions.merge())
+                        }
 
-                    errorMessage = null
-                    isSubmitted = true
-                    onSubmitApplication()
-                },
-                modifier = Modifier.weight(1.2f)
-            ) {
-                Text("Submit App")
+                        errorMessage = null
+                        isSubmitted = true
+                        onSubmitApplication()
+                    },
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Text("Submit App")
+                }
+            } else {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(2f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Submitted 🔒 (Applied)",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))

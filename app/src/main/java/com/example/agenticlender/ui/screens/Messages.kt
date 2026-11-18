@@ -1,8 +1,6 @@
 package com.example.agenticlender.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -40,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.Timestamp
@@ -48,6 +45,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 // Data holder for secure application-linked chat messages
@@ -68,6 +66,7 @@ fun MessageScreen() {
     var activeApplicationId by remember { mutableStateOf("APP-2025") }
     var unreadCount by remember { mutableStateOf(0) }
     val messages = remember { mutableStateListOf<ChatMessage>() }
+    val listState = rememberLazyListState()
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     val userId = currentUser?.uid ?: "anonymous_user"
@@ -82,6 +81,13 @@ fun MessageScreen() {
                     activeApplicationId = appId
                 }
             }
+    }
+
+    // Auto-scroll chat list to the newest message whenever messages update
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
     }
 
     // Scoped real-time message listener (strictly restricted to authorized borrower's account)
@@ -196,6 +202,7 @@ fun MessageScreen() {
 
         // Scoped Chat Message Stream
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -269,12 +276,32 @@ fun MessageScreen() {
             IconButton(
                 onClick = {
                     if (messageText.isNotBlank()) {
+                        val input = messageText.trim()
+                        messageText = ""
+
+                        val formattedTime = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+                        val senderName = currentUser?.email ?: "Borrower"
+
+                        // 1. Immediately show sent message locally in the UI
+                        messages.add(
+                            ChatMessage(
+                                id = "temp_${System.currentTimeMillis()}",
+                                applicationId = activeApplicationId,
+                                sender = senderName,
+                                text = input,
+                                timestamp = formattedTime,
+                                isFromUser = true,
+                                isRead = true
+                            )
+                        )
+
+                        // 2. Write sent message to Cloud Firestore database
                         val db = FirebaseFirestore.getInstance()
                         val messageMap = hashMapOf(
                             "applicationId" to activeApplicationId,
                             "borrowerUid" to userId,
-                            "sender" to (currentUser?.email ?: "Borrower"),
-                            "text" to messageText.trim(),
+                            "sender" to senderName,
+                            "text" to input,
                             "timestamp" to Timestamp.now(),
                             "isFromUser" to true,
                             "isRead" to true
@@ -283,8 +310,6 @@ fun MessageScreen() {
                             .document(userId)
                             .collection("messages")
                             .add(messageMap)
-
-                        messageText = ""
                     }
                 }
             ) {
