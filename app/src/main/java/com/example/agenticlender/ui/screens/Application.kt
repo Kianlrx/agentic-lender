@@ -727,41 +727,51 @@ fun PersonalDetailsScreen(
             if (!isReadOnly) {
                 OutlinedButton(
                     onClick = {
-                        currentUser?.uid?.let { uid ->
-                            val data = hashMapOf(
-                                "firstName" to firstName.trim(),
-                                "lastName" to lastName.trim(),
-                                "dob" to dob.trim(),
-                                "phone" to phone.trim(),
-                                "email" to email.trim(),
-                                "address" to address.trim(),
-                                "householdStatus" to householdStatus.trim(),
-                                "dependants" to dependants.trim(),
-                                "isJointApplication" to isJointApplication,
-                                "coFirstName" to coFirstName.trim(),
-                                "coLastName" to coLastName.trim(),
-                                "coEmail" to coEmail.trim(),
-                                "coPhone" to coPhone.trim(),
-                                "coDob" to coDob.trim(),
-                                "status" to "Draft",
-                                "updatedAt" to Timestamp.now()
-                            )
-                            db.collection("applications").document(uid).set(data, SetOptions.merge())
-
-                            val userUpdates = hashMapOf(
-                                "firstName" to firstName.trim(),
-                                "lastName" to lastName.trim(),
-                                "fullName" to "${firstName.trim()} ${lastName.trim()}",
-                                "email" to email.trim(),
-                                "phone" to phone.trim(),
-                                "dob" to dob.trim(),
-                                "address" to address.trim(),
-                                "updatedAt" to Timestamp.now()
-                            )
-                            db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
+                        val uid = currentUser?.uid
+                        if (uid == null) {
+                            errorMessage = "Error: No authenticated user session found. Please sign in."
+                            successMessage = null
+                            return@OutlinedButton
                         }
-                        errorMessage = null
-                        successMessage = "Draft Saved Successfully ✅"
+                        val data = hashMapOf(
+                            "firstName" to firstName.trim(),
+                            "lastName" to lastName.trim(),
+                            "dob" to dob.trim(),
+                            "phone" to phone.trim(),
+                            "email" to email.trim(),
+                            "address" to address.trim(),
+                            "householdStatus" to householdStatus.trim(),
+                            "dependants" to dependants.trim(),
+                            "isJointApplication" to isJointApplication,
+                            "coFirstName" to coFirstName.trim(),
+                            "coLastName" to coLastName.trim(),
+                            "coEmail" to coEmail.trim(),
+                            "coPhone" to coPhone.trim(),
+                            "coDob" to coDob.trim(),
+                            "status" to "Draft",
+                            "updatedAt" to Timestamp.now()
+                        )
+                        db.collection("applications").document(uid).set(data, SetOptions.merge())
+                            .addOnSuccessListener {
+                                errorMessage = null
+                                successMessage = "Draft Saved Successfully ✅"
+                            }
+                            .addOnFailureListener { e ->
+                                successMessage = null
+                                errorMessage = "Failed to save draft: ${e.localizedMessage}"
+                            }
+
+                        val userUpdates = hashMapOf(
+                            "firstName" to firstName.trim(),
+                            "lastName" to lastName.trim(),
+                            "fullName" to "${firstName.trim()} ${lastName.trim()}",
+                            "email" to email.trim(),
+                            "phone" to phone.trim(),
+                            "dob" to dob.trim(),
+                            "address" to address.trim(),
+                            "updatedAt" to Timestamp.now()
+                        )
+                        db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
                     },
                     modifier = Modifier.weight(1.1f)
                 ) {
@@ -780,43 +790,52 @@ fun PersonalDetailsScreen(
                             return@Button
                         }
 
-                        currentUser?.uid?.let { uid ->
-                            val data = hashMapOf(
-                                "firstName" to firstName.trim(),
-                                "lastName" to lastName.trim(),
-                                "dob" to dob.trim(),
-                                "phone" to phone.trim(),
-                                "email" to email.trim(),
-                                "address" to address.trim(),
-                                "householdStatus" to householdStatus.trim(),
-                                "dependants" to dependants.trim(),
-                                "isJointApplication" to isJointApplication,
-                                "coFirstName" to coFirstName.trim(),
-                                "coLastName" to coLastName.trim(),
-                                "coEmail" to coEmail.trim(),
-                                "coPhone" to coPhone.trim(),
-                                "coDob" to coDob.trim(),
-                                "status" to "Draft",
-                                "updatedAt" to Timestamp.now()
-                            )
-                            db.collection("applications").document(uid).set(data, SetOptions.merge())
-
-                            val userUpdates = hashMapOf(
-                                "firstName" to firstName.trim(),
-                                "lastName" to lastName.trim(),
-                                "fullName" to "${firstName.trim()} ${lastName.trim()}",
-                                "email" to email.trim(),
-                                "phone" to phone.trim(),
-                                "dob" to dob.trim(),
-                                "address" to address.trim(),
-                                "updatedAt" to Timestamp.now()
-                            )
-                            db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
+                        val uid = currentUser?.uid
+                        if (uid == null) {
+                            errorMessage = "Error: No authenticated user session found. Please sign in."
+                            successMessage = null
+                            return@Button
                         }
 
-                        errorMessage = null
-                        successMessage = "Personal details saved successfully!"
-                        onNavigateNext()
+                        val data = hashMapOf(
+                            "firstName" to firstName.trim(),
+                            "lastName" to lastName.trim(),
+                            "dob" to dob.trim(),
+                            "phone" to phone.trim(),
+                            "email" to email.trim(),
+                            "address" to address.trim(),
+                            "householdStatus" to householdStatus.trim(),
+                            "dependants" to dependants.trim(),
+                            "isJointApplication" to isJointApplication,
+                            "coFirstName" to coFirstName.trim(),
+                            "coLastName" to coLastName.trim(),
+                            "coEmail" to coEmail.trim(),
+                            "coPhone" to coPhone.trim(),
+                            "coDob" to coDob.trim(),
+                            "status" to "Draft",
+                            "updatedAt" to Timestamp.now()
+                        )
+                        db.collection("applications").document(uid).set(data, SetOptions.merge())
+                            .addOnSuccessListener {
+                                errorMessage = null
+                                successMessage = "Personal details saved successfully!"
+                                val userUpdates = hashMapOf(
+                                    "firstName" to firstName.trim(),
+                                    "lastName" to lastName.trim(),
+                                    "fullName" to "${firstName.trim()} ${lastName.trim()}",
+                                    "email" to email.trim(),
+                                    "phone" to phone.trim(),
+                                    "dob" to dob.trim(),
+                                    "address" to address.trim(),
+                                    "updatedAt" to Timestamp.now()
+                                )
+                                db.collection("users").document(uid).set(userUpdates, SetOptions.merge())
+                                onNavigateNext()
+                            }
+                            .addOnFailureListener { e ->
+                                successMessage = null
+                                errorMessage = "Failed to save: ${e.localizedMessage}"
+                            }
                     },
                     modifier = Modifier.weight(1.2f)
                 ) {

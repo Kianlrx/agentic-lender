@@ -51,7 +51,6 @@ fun MainFunction(modifier: Modifier = Modifier) {
         Screen.LoginScreen.route,
         Screen.VerifyEmailScreen.route,
         Screen.ResetPasswordScreen.route,
-        Screen.CreateProfileScreen.route,
         Screen.SelectApplicationTypeScreen.route
     )
     val showBottomBar = currentRoute != null && currentRoute !in authRoutes
@@ -120,7 +119,7 @@ fun MainFunction(modifier: Modifier = Modifier) {
                     onNavigateToLogin = { navController.navigate(Screen.LoginScreen.route) },
                     onNavigateToResetPassword = { navController.navigate(Screen.ResetPasswordScreen.route) },
                     onNavigateToVerifyEmail = {
-                        navController.navigate(Screen.CreateProfileScreen.route) {
+                        navController.navigate(Screen.SelectApplicationTypeScreen.route) {
                             popUpTo(Screen.LandingScreen.route) { inclusive = true }
                         }
                     }
@@ -129,7 +128,7 @@ fun MainFunction(modifier: Modifier = Modifier) {
             composable(Screen.VerifyEmailScreen.route) {
                 VerifyEmailScreen(
                     onVerified = {
-                        navController.navigate(Screen.CreateProfileScreen.route) {
+                        navController.navigate(Screen.SelectApplicationTypeScreen.route) {
                             popUpTo(Screen.LandingScreen.route) { inclusive = true }
                         }
                     },
@@ -144,15 +143,6 @@ fun MainFunction(modifier: Modifier = Modifier) {
                 ResetPasswordScreen(
                     onNavigateToLogin = {
                         navController.navigate(Screen.LoginScreen.route) {
-                            popUpTo(Screen.LandingScreen.route) { inclusive = true }
-                        }
-                    }
-                )
-            }
-            composable(Screen.CreateProfileScreen.route) {
-                CreateProfileScreen(
-                    onProfileCreated = {
-                        navController.navigate(Screen.SelectApplicationTypeScreen.route) {
                             popUpTo(Screen.LandingScreen.route) { inclusive = true }
                         }
                     }

@@ -124,37 +124,36 @@ fun UserDashboard(
     LaunchedEffect(currentUser?.uid) {
         val uid = currentUser?.uid ?: return@LaunchedEffect
 
-        // Fetch user profile info
-        db.collection("users").document(uid).get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    val first = document.getString("firstName")
-                    val full = document.getString("fullName")
+        // Fetch user profile info with real-time listener
+        db.collection("users").document(uid).addSnapshotListener { document, _ ->
+            if (document != null && document.exists()) {
+                val first = document.getString("firstName")
+                val full = document.getString("fullName")
 
-                    applicationType = document.getString("applicationType") ?: "Mortgage"
+                applicationType = document.getString("applicationType") ?: "Mortgage"
 
-                    val statusStr = document.getString("applicationStatus")
-                    if (!statusStr.isNullOrBlank()) {
-                        applicationStatus = try {
-                            AppWorkflowStatus.valueOf(
-                                statusStr.uppercase().replace(" ", "_")
-                            )
-                        } catch (_: Exception) {
-                            AppWorkflowStatus.DRAFT
-                        }
+                val statusStr = document.getString("applicationStatus")
+                if (!statusStr.isNullOrBlank()) {
+                    applicationStatus = try {
+                        AppWorkflowStatus.valueOf(
+                            statusStr.uppercase().replace(" ", "_")
+                        )
+                    } catch (_: Exception) {
+                        AppWorkflowStatus.DRAFT
                     }
-
-                    fetchedName = when {
-                        !first.isNullOrBlank() -> first
-                        !full.isNullOrBlank() -> full.substringBefore(" ")
-                        else -> currentUser.email?.substringBefore("@")
-                            ?.replaceFirstChar { it.uppercase() } ?: ""
-                    }
-                } else if (currentUser.email != null) {
-                    fetchedName = currentUser.email!!.substringBefore("@")
-                        .replaceFirstChar { it.uppercase() }
                 }
+
+                fetchedName = when {
+                    !first.isNullOrBlank() -> first
+                    !full.isNullOrBlank() -> full.substringBefore(" ")
+                    else -> currentUser.email?.substringBefore("@")
+                        ?.replaceFirstChar { it.uppercase() } ?: ""
+                }
+            } else if (currentUser.email != null) {
+                fetchedName = currentUser.email!!.substringBefore("@")
+                    .replaceFirstChar { it.uppercase() }
             }
+        }
 
         // Fetch application data and calculate real metrics
         db.collection("applications").document(uid).get()

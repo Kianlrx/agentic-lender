@@ -72,22 +72,21 @@ fun MoreScreen(
 
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
-            db.collection("users").document(uid).get()
-                .addOnSuccessListener { doc ->
-                    if (doc.exists()) {
-                        val full = doc.getString("fullName")
-                        val first = doc.getString("firstName")
-                        val last = doc.getString("lastName") ?: ""
-                        applicationType = doc.getString("applicationType") ?: ""
+            db.collection("users").document(uid).addSnapshotListener { doc, _ ->
+                if (doc != null && doc.exists()) {
+                    val full = doc.getString("fullName")
+                    val first = doc.getString("firstName")
+                    val last = doc.getString("lastName") ?: ""
+                    applicationType = doc.getString("applicationType") ?: ""
 
-                        fetchedName = when {
-                            !full.isNullOrBlank() -> full
-                            !first.isNullOrBlank() -> "$first $last".trim()
-                            else -> currentUser.email?.substringBefore("@") ?: "User Account"
-                        }
-                        fetchedEmail = doc.getString("email") ?: (currentUser.email ?: "")
+                    fetchedName = when {
+                        !full.isNullOrBlank() -> full
+                        !first.isNullOrBlank() -> "$first $last".trim()
+                        else -> currentUser.email?.substringBefore("@") ?: "User Account"
                     }
+                    fetchedEmail = doc.getString("email") ?: (currentUser.email ?: "")
                 }
+            }
         }
     }
 
