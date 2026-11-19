@@ -1,8 +1,34 @@
-# Android mobile app
+# Android Mobile App
 
-Native Android prototype built with Kotlin, Jetpack Compose, Firebase
-Authentication, and Cloud Firestore.
+Agentic Lender is a native Android prototype for retail borrowers applying for a Mortgage or Home Equity Line of Credit (HELOC). It is built with Kotlin, Jetpack Compose, Firebase Authentication, and Cloud Firestore.
 
+The app lets borrowers create an account, complete a loan application, upload documents, chat with a broker and track their application status. 
+
+## Key Features
+
+- Email and password signup, login, password rest and email verification
+- Borrower profile store in Firebase
+- Mortgage or HELOC application
+- One active application at a time
+- Save application draft at any time
+- Review screen before submission
+- Estimated borrowign capacity and monthly repayments
+- LTI,DTI and LTV calculations
+- Prototype risk level - Low, Medium or High
+- AI property valuation and price comparision
+- Document status tracking
+- Real-time chat with an assigned broker
+
+## Application Stages
+- Draft - Application is being completed
+- Applied - Application has been submitted
+- AI Deliberate - AI is reviewing the applicaiton
+- Conditionally Approved - Approved pending more documents
+- Underwriter Approved - Financial details have been verificed
+- Final Approval - Ready for funding
+- Closed - Mortgage process is complete
+- Declined - Application was not approved
+  
 ## Requirements
 
 - Android Studio with the Android SDK and a compatible JDK (the project
@@ -30,7 +56,9 @@ cd mobile-app
 ## Firebase data
 
 - Profiles: `users/{uid}`
+- Loan Application: `application/{uid}`
 - Messages: `chats/{uid}/messages/{messageId}`
+- Uploaded documents: `documents/{uid}/{docId}`
 
 The mobile app currently does not submit loan applications to the web app's
 `applications` collection. See [the root README](../README.md) for the current
