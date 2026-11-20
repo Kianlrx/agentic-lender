@@ -111,6 +111,18 @@ def test_no_green_discount_for_d1(doc):
     assert s["green_discount_bps"] == 0 and s["apr_basis_points"] in (365, 385)
 
 
+def test_exempt_or_pending_ber_is_not_sent_to_valuation_model(doc):
+    form(doc)["ber"] = "Exempt / Pending"
+    result = run(doc)
+    valuation = next(agent for agent in result.agents if agent.agent == "Valuation Agent")
+    green = result.agents[-1].result["green_mortgage"]
+
+    assert from_web_form("x", doc).property.ber_rating is None
+    assert valuation.status == "UNAVAILABLE"
+    assert any("ber_rating" in warning for warning in valuation.warnings)
+    assert green["eligible"] is None
+
+
 def test_red_flag_forces_refer(doc):
     form(doc)["insolvency"] = "Yes"
     s = run(doc).summary

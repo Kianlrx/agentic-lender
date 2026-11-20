@@ -97,7 +97,10 @@ def db():
                                  "path of the Firebase service account JSON (see README).")
         import firebase_admin
         from firebase_admin import firestore
-        firebase_admin.initialize_app()
+        try:
+            firebase_admin.get_app()
+        except ValueError:
+            firebase_admin.initialize_app()
         _db = firestore.client()
     return _db
 

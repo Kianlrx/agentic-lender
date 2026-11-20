@@ -54,8 +54,8 @@ const createApplicant = () => ({
   netProfitYear1: '',
   netProfitYear2: '',
   accountant: '',
-  bankAccounts: [{ provider: '', balance: '', monthlySaving: '', source: '' }],
-  otherAssets: [{ description: '', value: '' }],
+  bankAccounts: [],
+  otherAssets: [],
   loans: [],
   creditCards: [],
   maintenanceAndChildcare: ''
@@ -80,6 +80,7 @@ const createInitialForm = () => ({
   bedrooms: '',
   tenure: '',
   propertyUse: '',
+  hasOtherAdultOccupants: '',
   otherOccupants: '',
   siteValue: '',
   buildCost: '',
@@ -127,7 +128,41 @@ const selectOptions = {
   rateType: ['Fixed', 'Variable', 'Split'],
   repaymentType: ['Principal and interest', 'Interest only', 'Part and part'],
   incomeCurrency: ['EUR', 'GBP', 'USD', 'Other'],
-  refinance: ['Yes', 'No']
+  refinance: ['Yes', 'No'],
+  ber: ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'D1', 'D2', 'E1', 'E2', 'F', 'G', 'Exempt / Pending'],
+  fundsSource: ['Personal savings', 'Gift', 'Inheritance', 'Sale proceeds', 'Help to Buy', 'Other']
+};
+const eircodeRegex = /^[AC-FHKNPRTV-Y0-9]{3}\s?[AC-FHKNPRTV-Y0-9]{4}$/i;
+const eircodePattern = '[AC-FHKNPRTV-Yac-fhknprtv-y0-9]{3}\\s?[AC-FHKNPRTV-Yac-fhknprtv-y0-9]{4}';
+
+const formatNumberWithCommas = (value) => {
+  if (value === '' || value === null || value === undefined) return '';
+  const [whole, fraction] = String(value).split('.');
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction === undefined ? formattedWhole : `${formattedWhole}.${fraction}`;
+};
+
+const cleanNumericInput = (value) => {
+  const cleaned = value.replace(/,/g, '').replace(/[^\d.]/g, '');
+  const decimalIndex = cleaned.indexOf('.');
+  return decimalIndex < 0
+    ? cleaned
+    : `${cleaned.slice(0, decimalIndex + 1)}${cleaned.slice(decimalIndex + 1).replace(/\./g, '')}`;
+};
+
+const numericValidationMessage = (value, { min, max, step }) => {
+  if (value === '') return '';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'Enter a valid number.';
+  if (min !== undefined && number < Number(min)) return `Enter a value of at least ${min}.`;
+  if (max !== undefined && number > Number(max)) return `Enter a value no greater than ${max}.`;
+  const stepValue = Number(step);
+  if (step && step !== 'any' && Number.isFinite(stepValue) && stepValue > 0) {
+    const base = min === undefined ? 0 : Number(min);
+    const stepCount = (number - base) / stepValue;
+    if (Math.abs(stepCount - Math.round(stepCount)) > 1e-7) return `Enter a value in increments of ${step}.`;
+  }
+  return '';
 };
 const nationalities = `Afghan|Albanian|Algerian|American|Andorran|Angolan|Argentine|Armenian|Australian|Austrian|Azerbaijani|Bahamian|Bahraini|Bangladeshi|Barbadian|Belarusian|Belgian|Belizean|Beninese|Bhutanese|Bolivian|Bosnian|Brazilian|British|Bulgarian|Burkinabé|Burmese|Burundian|Cambodian|Cameroonian|Canadian|Cape Verdean|Chadian|Chilean|Chinese|Colombian|Congolese|Costa Rican|Croatian|Cuban|Cypriot|Czech|Danish|Djiboutian|Dominican|Dutch|Ecuadorian|Egyptian|English|Eritrean|Estonian|Ethiopian|Fijian|Finnish|French|Gambian|Georgian|German|Ghanaian|Greek|Grenadian|Guatemalan|Guinean|Guyanese|Haitian|Honduran|Hungarian|Icelandic|Indian|Indonesian|Iranian|Iraqi|Irish|Israeli|Italian|Ivorian|Jamaican|Japanese|Jordanian|Kazakh|Kenyan|Kuwaiti|Kyrgyz|Lao|Latvian|Lebanese|Liberian|Libyan|Liechtenstein|Lithuanian|Luxembourger|Malagasy|Malawian|Malaysian|Maldivian|Malian|Maltese|Mauritanian|Mauritian|Mexican|Moldovan|Monegasque|Mongolian|Montenegrin|Moroccan|Mozambican|Namibian|Nepalese|New Zealander|Nicaraguan|Nigerian|North Korean|Northern Irish|Norwegian|Omani|Pakistani|Palauan|Palestinian|Panamanian|Papua New Guinean|Paraguayan|Peruvian|Polish|Portuguese|Qatari|Romanian|Russian|Rwandan|Saint Lucian|Salvadoran|Samoan|Saudi Arabian|Scottish|Senegalese|Serbian|Singaporean|Slovak|Slovenian|Somali|South African|South Korean|Spanish|Sri Lankan|Sudanese|Surinamese|Swedish|Swiss|Syrian|Taiwanese|Tajik|Tanzanian|Thai|Togolese|Trinidadian|Tunisian|Turkish|Turkmen|Tuvaluan|Ugandan|Ukrainian|Emirati|Uruguayan|Uzbek|Vatican citizen|Venezuelan|Vietnamese|Welsh|Yemeni|Zambian|Zimbabwean`
   .split('|')
@@ -167,6 +202,23 @@ const calculateIrishStampDuty = (price) => (
     + Math.min(Math.max(price - 1_000_000, 0), 500_000) * 0.02
     + Math.max(price - 1_500_000, 0) * 0.06
   ) * 100) / 100
+);
+
+const hasCompleteBankAccount = (applicants) => applicants.some(applicant =>
+  applicant.bankAccounts.some(account =>
+    Boolean(account.provider.trim())
+      && account.balance !== ''
+      && Number.isFinite(Number(account.balance))
+      && Number(account.balance) >= 0
+  )
+);
+
+const totalLiquidSavings = (applicants) => applicants.reduce(
+  (total, applicant) => total + applicant.bankAccounts.reduce(
+    (accountTotal, account) => accountTotal + (Number(account.balance) || 0),
+    0
+  ),
+  0
 );
 
 function NationalitySelect({ value, onChange, required, listId }) {
@@ -374,33 +426,43 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
   const [formError, setFormError] = useState('');
   const formRef = useRef(null);
 
-  const update = (path, value) => setForm(current => {
-    let updated = updatePath(current, path, value);
-    if (path.length === 1 && path[0] === 'applicationKind') {
-      updated = updatePath(updated, ['applicants'], value === 'Joint applicants'
-        ? updated.applicants.length === 1 ? [...updated.applicants, createApplicant()] : updated.applicants.slice(0, 2)
-        : updated.applicants.slice(0, 1));
-    }
-    if (path[0] === 'applicants' && path[2] === 'nationality') {
-      const nonEea = value ? (eeaNationalities.has(value) ? 'No' : 'Yes') : '';
-      updated = updatePath(updated, ['applicants', path[1], 'nonEea'], nonEea);
-      if (nonEea !== 'Yes') {
-        updated = updatePath(updated, ['applicants', path[1], 'visaType'], '');
-        updated = updatePath(updated, ['applicants', path[1], 'visaExpiry'], '');
+  const update = (path, value) => {
+    setFormError('');
+    setForm(current => {
+      let updated = updatePath(current, path, value);
+      if (path.length === 1 && path[0] === 'applicationKind') {
+        updated = updatePath(updated, ['applicants'], value === 'Joint applicants'
+          ? updated.applicants.length === 1 ? [...updated.applicants, createApplicant()] : updated.applicants.slice(0, 2)
+          : updated.applicants.slice(0, 1));
       }
-    }
-    if (path.length === 1 && path[0] === 'applicationType') {
-      updated = updatePath(updated, ['stampDuty'], value === 'Purchase' && updated.purchasePrice !== ''
-        ? calculateIrishStampDuty(Number(updated.purchasePrice))
-        : 0);
-    }
-    if (path.length === 1 && path[0] === 'purchasePrice') {
-      updated = updatePath(updated, ['stampDuty'], updated.applicationType === 'Purchase' && value !== ''
-        ? calculateIrishStampDuty(Number(value))
-        : 0);
-    }
-    return updated;
-  });
+      if (path[0] === 'applicants' && path[2] === 'nationality') {
+        const nonEea = value ? (eeaNationalities.has(value) ? 'No' : 'Yes') : '';
+        updated = updatePath(updated, ['applicants', path[1], 'nonEea'], nonEea);
+        if (nonEea !== 'Yes') {
+          updated = updatePath(updated, ['applicants', path[1], 'visaType'], '');
+          updated = updatePath(updated, ['applicants', path[1], 'visaExpiry'], '');
+        }
+      }
+      if (path[0] === 'applicants' && path[2] === 'employmentCategory' && value !== 'Employed') {
+        updated = updatePath(updated, ['applicants', path[1], 'yearsWithEmployer'], '');
+        updated = updatePath(updated, ['applicants', path[1], 'previousEmployer'], '');
+      }
+      if (path.length === 1 && path[0] === 'applicationType') {
+        updated = updatePath(updated, ['stampDuty'], value === 'Purchase' && updated.purchasePrice !== ''
+          ? calculateIrishStampDuty(Number(updated.purchasePrice))
+          : 0);
+      }
+      if (path.length === 1 && path[0] === 'purchasePrice') {
+        updated = updatePath(updated, ['stampDuty'], updated.applicationType === 'Purchase' && value !== ''
+          ? calculateIrishStampDuty(Number(value))
+          : 0);
+      }
+      if (path.length === 1 && path[0] === 'hasOtherAdultOccupants' && value !== 'Yes') {
+        updated = updatePath(updated, ['otherOccupants'], '');
+      }
+      return updated;
+    });
+  };
   const read = (path) => readPath(form, path);
   const visibleStepIndices = form.propertyFound === 'No'
     ? steps.map((_, index) => index).filter(index => index !== 4)
@@ -410,6 +472,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
   const renderField = (label, path, options = {}) => {
     const value = read(path) ?? '';
     const required = Boolean(options.required);
+    const numeric = options.type === 'number';
     const choices = options.options || (options.type === 'yesNo' ? selectOptions.yesNo : null);
     return (
       <label className={fieldClass} key={path.join('.')}>
@@ -434,21 +497,43 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           />
         ) : (
           <input
-            type={options.type || 'text'}
-            value={value}
-            onChange={event => update(path, event.target.value)}
+            type={numeric ? 'text' : options.type || 'text'}
+            inputMode={numeric ? (String(options.step).includes('.') ? 'decimal' : 'numeric') : undefined}
+            value={numeric ? formatNumberWithCommas(value) : value}
+            onChange={event => {
+              if (numeric) {
+                const numericValue = cleanNumericInput(event.target.value);
+                event.target.setCustomValidity(numericValidationMessage(numericValue, options));
+                update(path, numericValue);
+              } else {
+                event.target.setCustomValidity('');
+                update(path, event.target.value);
+              }
+            }}
             required={required}
-            min={options.min}
-            max={options.max}
-            step={options.step}
+            min={numeric ? undefined : options.min}
+            max={numeric ? undefined : options.max}
+            step={numeric ? undefined : options.step}
             maxLength={options.maxLength}
             autoComplete={options.autoComplete}
+            pattern={options.pattern}
+            onBlur={options.onBlur}
             readOnly={options.readOnly}
           />
         )}
         {options.help ? <small>{options.help}</small> : null}
       </label>
     );
+  };
+
+  const normalizeEircode = (path) => (event) => {
+    const value = event.currentTarget.value.trim().toUpperCase();
+    event.currentTarget.setCustomValidity(
+      value && !eircodeRegex.test(value)
+        ? 'Enter a valid 7-character Eircode, for example D02 X285.'
+        : ''
+    );
+    if (value !== event.currentTarget.value) update(path, value);
   };
 
   const renderCheck = (label, path, required = false) => (
@@ -462,6 +547,16 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
       <span>{label}{required ? <span className="mortgage-required-marker"> *</span> : null}</span>
     </label>
   );
+
+  const validateRequiredCustomSelects = () => {
+    const emptySelect = [...(formRef.current?.querySelectorAll(
+      '.mortgage-custom-select-input[aria-required="true"]'
+    ) || [])].find(input => !input.value);
+    if (!emptySelect) return true;
+    emptySelect.focus();
+    setFormError('Please choose an option for each required dropdown.');
+    return false;
+  };
 
   const renderRepeatGroup = (title, path, fields, {
     itemLabel = title,
@@ -478,12 +573,18 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           <fieldset className="mortgage-repeat-item" key={`${path.join('.')}-${index}`}>
             <legend>{itemLabel} {index + 1}.</legend>
             <div className="mortgage-form-grid">
-              {fields.map(field => {
+              {fields.filter(field => !(currentKey && field.key === 'to' && item[currentKey])).map(field => {
                 const options = field.options || {};
                 const required = options.requiredWhen
                   ? options.requiredWhen(item)
                   : options.required;
-                return renderField(field.label, [...path, index, field.key], { ...options, required });
+                return renderField(field.label, [...path, index, field.key], {
+                  ...options,
+                  required,
+                  onBlur: options.normalizeEircode
+                    ? normalizeEircode([...path, index, field.key])
+                    : options.onBlur
+                });
               })}
             </div>
             {currentKey ? (
@@ -539,7 +640,11 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
   };
 
   const nextStep = () => {
-    if (!formRef.current?.reportValidity()) return;
+    if (!formRef.current?.reportValidity() || !validateRequiredCustomSelects()) return;
+    if (step === 3 && !hasCompleteBankAccount(form.applicants)) {
+      setFormError('Add at least one bank or savings provider and enter its balance. A balance of €0 is allowed.');
+      return;
+    }
     const nextStepIndex = visibleStepIndices[currentStepPosition + 1];
     if (nextStepIndex !== undefined) setStep(nextStepIndex);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -586,7 +691,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                   {renderField('Legal name', [...applicantPath, 'legalName'], { required: true, autoComplete: 'name' })}
                   {renderField('Previous / maiden name', [...applicantPath, 'previousName'])}
                   {renderField('Date of birth', [...applicantPath, 'dateOfBirth'], { type: 'date', required: true })}
-                  {renderField('Gender', [...applicantPath, 'gender'], { options: selectOptions.gender })}
+                  {renderField('Gender', [...applicantPath, 'gender'], { options: selectOptions.gender, required: true })}
                   {renderField('PPSN', [...applicantPath, 'ppsn'], {required: true, help: 'Your PPS number is stored with this application.' })}
                   {renderField('Marital / civil status', [...applicantPath, 'maritalStatus'], { options: selectOptions.maritalStatus, required: true })}
                   {renderField('Nationality', [...applicantPath, 'nationality'], { nationality: true, required: true })}
@@ -610,7 +715,15 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                 </div>
                 {renderRepeatGroup('Address history (last 3 years)', [...applicantPath, 'addressHistory'], [
                   { key: 'address', label: 'Address', options: { required: true } },
-                  { key: 'eircode', label: 'Eircode', options: { required: true } },
+                  {
+                    key: 'eircode',
+                    label: 'Eircode',
+                    options: {
+                      required: true,
+                      pattern: eircodePattern,
+                      normalizeEircode: true
+                    }
+                  },
                   { key: 'from', label: 'From', options: { type: 'date', required: true } },
                   { key: 'to', label: 'To', options: { type: 'date', requiredWhen: item => !item.current } }
                 ], {
@@ -654,8 +767,14 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
                       {renderField('Occupation', [...path, 'occupation'], { required: true })}
                       {renderField('Employment start date', [...path, 'employmentStart'], { type: 'date', required: applicant.employmentCategory === 'Employed' })}
                       {applicant.employmentCategory === 'Employed' ? renderField('Contract type', [...path, 'contractType'], { options: selectOptions.contractType, required: true }) : null}
-                      {renderField('Tenure with current employer', [...path, 'yearsWithEmployer'], { type: 'number', min: 0, step: '0.1', unit: 'years', required: true })}
-                      {applicant.yearsWithEmployer !== '' && Number(applicant.yearsWithEmployer) < 2
+                      {applicant.employmentCategory === 'Employed' ? renderField('Tenure with current employer', [...path, 'yearsWithEmployer'], {
+                        type: 'number',
+                        min: 0,
+                        step: '0.1',
+                        unit: 'years',
+                        required: true
+                      }) : null}
+                      {applicant.employmentCategory === 'Employed' && applicant.yearsWithEmployer !== '' && Number(applicant.yearsWithEmployer) < 2
                         ? renderField('Previous employer details', [...path, 'previousEmployer'], {
                           required: true,
                           help: 'Include the employer name, role and dates.'
@@ -707,15 +826,64 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
               >
                 {form.applicationKind === 'Joint applicants' ? <legend>Applicant {index + 1}.</legend> : null}
                 {renderRepeatGroup('Bank and savings accounts', [...path, 'bankAccounts'], [
-                  { key: 'provider', label: 'Bank / provider' },
-                  { key: 'balance', label: 'Balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
+                  {
+                    key: 'provider',
+                    label: 'Bank / provider',
+                    options: {
+                      requiredWhen: item => Boolean(item.provider || item.balance !== '' || item.monthlySaving !== '' || item.source)
+                    }
+                  },
+                  {
+                    key: 'balance',
+                    label: 'Balance',
+                    options: {
+                      type: 'number',
+                      min: 0,
+                      step: '0.01',
+                      unit: 'EUR',
+                      requiredWhen: item => Boolean(item.provider || item.balance !== '' || item.monthlySaving !== '' || item.source)
+                    }
+                  },
                   { key: 'monthlySaving', label: 'Monthly saving', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } },
-                  { key: 'source', label: 'Source of funds' }
-                ], { itemLabel: 'Bank account', addLabel: 'Add bank account' })}
-                {renderRepeatGroup('Other assets (shares, policies, land)', [...path, 'otherAssets'], [
-                  { key: 'description', label: 'Asset description' },
-                  { key: 'value', label: 'Estimated value', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR' } }
-                ], { itemLabel: 'Other asset', addLabel: 'Add other asset' })}
+                  {
+                    key: 'source',
+                    label: 'Source of funds',
+                    options: {
+                      options: selectOptions.fundsSource,
+                      requiredWhen: item => Number(item.balance) > 0 || Number(item.monthlySaving) > 0
+                    }
+                  }
+                ], {
+                  itemLabel: 'Bank account',
+                  addLabel: 'Add bank account',
+                  allowEmpty: true
+                })}
+                {applicant.otherAssets.length > 0 ? renderRepeatGroup('Other assets (shares, policies, land)', [...path, 'otherAssets'], [
+                  {
+                    key: 'description',
+                    label: 'Asset description',
+                    options: { requiredWhen: item => Boolean(item.description || item.value !== '') }
+                  },
+                  {
+                    key: 'value',
+                    label: 'Estimated value',
+                    options: {
+                      type: 'number',
+                      min: 0,
+                      step: '0.01',
+                      unit: 'EUR',
+                      requiredWhen: item => Boolean(item.description || item.value !== '')
+                    }
+                  }
+                ], { itemLabel: 'Other asset', addLabel: 'Add other asset', allowEmpty: true }) : (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => update([...path, 'otherAssets'], [{ description: '', value: '' }])}
+                  >
+                    Add other asset
+                  </button>
+                )}
                 {renderRepeatGroup('Loans and credit commitments', [...path, 'loans'], [
                   { key: 'lender', label: 'Lender', options: { required: true } },
                   { key: 'balance', label: 'Outstanding balance', options: { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true } },
@@ -760,16 +928,23 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
           {form.propertyFound === 'Yes' ? (
             <div className="mortgage-form-grid">
               {renderField('Property address', ['propertyAddress'], { required: true })}
-              {renderField('Eircode', ['eircode'], { required: true })}
+              {renderField('Eircode', ['eircode'], {
+                required: form.propertyStatus !== 'New build' || form.applicationType !== 'Purchase',
+                pattern: eircodePattern,
+                onBlur: normalizeEircode(['eircode'])
+              })}
               {renderField('Property type', ['propertyType'], { options: selectOptions.propertyType, required: true })}
               {renderField('New or existing property', ['propertyStatus'], { options: selectOptions.propertyStatus, required: true })}
               {renderField('Year built', ['yearBuilt'], { type: 'number', min: 1700, max: new Date().getFullYear(), step: 1 })}
-              {renderField('BER rating', ['ber'], { required: form.propertyStatus === 'Second-hand' })}
-              {renderField('Floor area', ['floorArea'], { type: 'number', min: 0, step: '0.1', unit: 'm²' })}
-              {renderField('Bedrooms', ['bedrooms'], { type: 'number', min: 0, step: 1 })}
+              {renderField('BER rating', ['ber'], { options: selectOptions.ber, required: true })}
+              {renderField('Floor area', ['floorArea'], { type: 'number', min: 0.1, step: '0.1', unit: 'm²', required: true })}
+              {renderField('Bedrooms', ['bedrooms'], { type: 'number', min: 0, step: 1, required: true })}
               {renderField('Freehold / leasehold', ['tenure'], { options: selectOptions.tenure })}
               {renderField('Property use', ['propertyUse'], { options: selectOptions.propertyUse, required: true })}
-              {renderField('Other occupants', ['otherOccupants'])}
+              {renderField('Will anyone aged 18 or over (other than the applicants) live in the property?', ['hasOtherAdultOccupants'], {
+                type: 'yesNo'
+              })}
+              {form.hasOtherAdultOccupants === 'Yes' ? renderField('Other occupants', ['otherOccupants']) : null}
               {form.propertyStatus === 'Self-build' ? (
                 <>
                   {renderField('Site value', ['siteValue'], { type: 'number', min: 0, step: '0.01', unit: 'EUR', required: true })}
@@ -846,7 +1021,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
             {renderField('Renovation costs', ['renovationCosts'], { type: 'number', min: 0, step: '0.01', unit: 'EUR' })}
           </div>
           {renderRepeatGroup('Sources of funds', ['funds'], [
-            { key: 'source', label: 'Source (savings, gift, inheritance, sale proceeds, Help to Buy)', options: { required: true } },
+            { key: 'source', label: 'Source (savings, gift, inheritance, sale proceeds, Help to Buy)', options: { options: selectOptions.fundsSource, required: true } },
             { key: 'amount', label: 'Amount', options: { type: 'number', min: 0.01, step: '0.01', unit: 'EUR', required: true } },
             {
               key: 'donorRelationship',
@@ -899,6 +1074,7 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
         </fieldset>
         <div className="mortgage-declarations">
           <h3>Declarations and consent</h3>
+          <p>Consenting to AI-assisted analysis can significantly expedite your application approval.</p>
           {renderCheck('I confirm the information provided is complete and accurate.', ['declarations', 'accurate'], true)}
           {renderCheck('I consent to the lender carrying out credit checks.', ['declarations', 'creditCheck'], true)}
           {renderCheck('I consent to the processing of my personal data to assess this application.', ['declarations', 'dataProcessing'], true)}
@@ -914,11 +1090,29 @@ export default function MortgageApplication({ onCancel, onSubmit, submitting, er
       nextStep();
       return;
     }
+    if (!validateRequiredCustomSelects()) return;
     const outlay = ['purchasePrice', 'stampDuty', 'legalCosts', 'renovationCosts']
       .reduce((total, key) => total + Number(form[key] || 0), 0);
     const funding = form.funds.reduce((total, fund) => total + Number(fund.amount || 0), 0);
     if (Math.abs(outlay - Number(form.loanAmount || 0) - funding) >= 1) {
       setFormError('Please make sure your loan and funding sources balance the total costs before submitting.');
+      return;
+    }
+    if (!hasCompleteBankAccount(form.applicants)) {
+      setFormError('Add at least one bank or savings provider and enter its balance. A balance of €0 is allowed.');
+      return;
+    }
+    const deposit = Math.max(0, Number(form.purchasePrice || 0) - Number(form.loanAmount || 0));
+    if (form.applicationType === 'Purchase' && totalLiquidSavings(form.applicants) < deposit) {
+      setFormError('Your declared bank and savings balances must cover the deposit (purchase price less the requested loan amount).');
+      return;
+    }
+    const providedEircodes = [
+      form.eircode,
+      ...form.applicants.flatMap(applicant => applicant.addressHistory.map(address => address.eircode))
+    ].filter(Boolean);
+    if (providedEircodes.some(value => !eircodeRegex.test(value.trim()))) {
+      setFormError('Enter a valid 7-character Eircode wherever one is provided.');
       return;
     }
     setFormError('');

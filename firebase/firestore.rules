@@ -31,7 +31,7 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      allow read: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'borrower', 'applicantEmail', 'phone', 'location',
@@ -56,17 +56,12 @@ service cloud.firestore {
           || request.resource.data.documents is list)
         && (!('consent' in request.resource.data)
           || request.resource.data.consent is map);
-      allow update: if signedIn()
-        && resource.data.createdBy == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'borrower', 'applicantEmail', 'phone', 'location', 'loanRequested'
-        ])
-        && request.resource.data.borrower is string
-        && request.resource.data.applicantEmail is string
-        && request.resource.data.phone is string
-        && request.resource.data.location is string
-        && request.resource.data.loanRequested is string;
-      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow update, delete: if signedIn();
+
+      match /aiAssessments/{assessmentId} {
+        allow read: if signedIn();
+        allow write: if false;
+      }
     }
   }
 }

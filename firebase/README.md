@@ -39,30 +39,36 @@ this folder. The current client queries do not require composite indexes.
   access their own document.
 - `chats/{uid}/messages/{messageId}`: a mobile user's messages; only that
   authenticated user can read or add messages to their own chat.
-- `applications/{applicationId}`: web application records. A signed-in user
-  can read, update, and delete only records whose `createdBy` matches their
-  UID. Mortgage applications store the step responses in `applicationData`
-  and document metadata in `documents`.
+- `applications/{applicationId}`: web application records. Temporarily, any
+  signed-in user can read, update, and delete every record; creating a record
+  still requires `createdBy` to match that user's UID. Mortgage applications
+  store the step responses in `applicationData` and document metadata in
+  `documents`.
+- `applications/{applicationId}/aiAssessments/{assessmentId}`: any signed-in
+  user can read the detailed agent outputs for the prototype application view.
+  Client writes are denied; the AI engine writes with its Admin SDK.
 - `mortgageApplications/{uid}/{applicationId}/{fileName}`: uploaded mortgage
   documents. Storage rules restrict uploads, reads, and deletes to the
   authenticated owner, and allow only PDF, JPEG, or PNG files up to 15 MB.
-- `applications/{applicationId}/aiAssessments/{assessmentId}` and
-  `settings/riskThresholds`: the AI engine accesses these using the Firebase
+- `settings/riskThresholds`: the AI engine accesses this using the Firebase
   Admin SDK. The service account bypasses client rules. No client access is
   granted by these rules.
 
 The mortgage form collects AI-analysis consent and income, debt, deposit,
 property, and other details under `applicationData`. The AI engine maps these
 (`ai-engine/al_ai/web_form.py`) and, through the Admin SDK, adds an
-`aiAssessment` summary to the application. Client rules don't let users change
-that field. The engine refuses to analyze a record without
+`aiAssessment` summary to the application. Under the temporary broad update
+rule, any signed-in user can also change that field. The engine refuses to
+analyze a record without
 `consent.aiAnalysis == true`; see [the AI engine README](../ai-engine/README.md).
 
 ## Security limitations
 
-These rules provide owner-only access for the prototype, not a staff review
-workflow. Add trusted staff roles and an explicit authorized-reviewer policy
-before enabling staff access to applicant records or documents. Test rules in
-the Firebase Emulator Suite before using real applicant data. Never place a
+Application access is deliberately broad for this prototype: any authenticated
+account can read, edit, or delete every application, including sensitive
+borrower data and AI assessments. This is not suitable for real applicant data.
+Uploaded documents in Storage remain owner-restricted. Before using real data,
+replace this temporary policy with trusted applicant, broker, and underwriter
+roles and test the rules in the Firebase Emulator Suite. Never place a
 service-account JSON file in the repository; the root `.gitignore` excludes
 common service-account names.

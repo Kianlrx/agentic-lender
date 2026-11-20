@@ -123,6 +123,9 @@ def from_web_form(app_id: str, doc: dict, card_pct: float = 0.03) -> Application
     funds = form.get("funds", [])
     gifts = [f for f in funds if "gift" in (f.get("source") or "").lower()]
     joint = form.get("applicationKind") == "Joint applicants"
+    ber_rating = (form.get("ber") or "").strip().upper() or None
+    if ber_rating == "EXEMPT / PENDING":
+        ber_rating = None
 
     prop: dict = {"asking_price": price}
     if form.get("propertyFound") == "Yes":
@@ -136,7 +139,7 @@ def from_web_form(app_id: str, doc: dict, card_pct: float = 0.03) -> Application
             notes.append("Property type 'House' valued as semi-detached (form has no house style)")
         prop |= {"property_type": prop_type, "floor_area_m2": num(form.get("floorArea")),
                  "bedrooms": num(form.get("bedrooms")), "year_built": num(form.get("yearBuilt")),
-                 "ber_rating": (form.get("ber") or "").strip().upper() or None, "county": county}
+                 "ber_rating": ber_rating, "county": county}
     else:
         notes.append("No property found yet (Approval in Principle): valuation skipped")
 

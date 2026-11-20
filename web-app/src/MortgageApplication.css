@@ -500,6 +500,10 @@
   margin-left: auto;
 }
 
+.mortgage-form > .error-message {
+  padding: 0 1.5rem;
+}
+
 .mortgage-required-note {
   margin: 0;
   padding: 0 1.5rem 1rem;
@@ -529,6 +533,11 @@
   .mortgage-section-heading,
   .mortgage-step-content {
     padding: 1rem;
+  }
+
+  .mortgage-form > .error-message {
+    padding-right: 1rem;
+    padding-left: 1rem;
   }
 }
 

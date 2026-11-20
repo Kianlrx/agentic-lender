@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useRef, useState, useEffect } from 'react';
 import './App.css';
 import { auth, db } from './firebase';
+import ApplicationView from './ApplicationView';
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
@@ -10,7 +11,7 @@ import {
   signOut,
   updatePassword
 } from 'firebase/auth';
-import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 
 const MortgageApplication = lazy(() => import('./MortgageApplication'));
 
@@ -27,14 +28,6 @@ const panelStyle = {
   border: '1px solid var(--border)',
   marginBottom: '1.5rem',
   boxShadow: 'var(--panel-shadow)'
-};
-
-const applicationFields = {
-  borrower: '',
-  applicantEmail: '',
-  phone: '',
-  location: '',
-  loanRequested: ''
 };
 
 const getApplicationDate = (timestamp) => {
@@ -60,6 +53,7 @@ export default function App() {
   const [mortgageSubmitError, setMortgageSubmitError] = useState('');
   const mortgageSubmittingRef = useRef(false);
   const [page, setPage] = useState('pipeline');
+  const [applicationReturnPage, setApplicationReturnPage] = useState('pipeline');
   const [searchFields, setSearchFields] = useState({
     borrower: '',
     applicantEmail: '',
@@ -72,13 +66,7 @@ export default function App() {
   });
   const [submittedSearch, setSubmittedSearch] = useState(null);
   const [selectedApplication, setSelectedApplication] = useState(null);
-  const [editingApplication, setEditingApplication] = useState(false);
-  const [deletingApplication, setDeletingApplication] = useState(false);
   const [applicationActionSuccess, setApplicationActionSuccess] = useState('');
-  const [editForm, setEditForm] = useState(applicationFields);
-  const [editBusy, setEditBusy] = useState(false);
-  const [editError, setEditError] = useState('');
-  const [editSuccess, setEditSuccess] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -117,11 +105,7 @@ export default function App() {
     setPipelineLoading(true);
     setPipelineError('');
 
-    const userApplications = query(
-      collection(db, 'applications'),
-      where('createdBy', '==', user.uid)
-    );
-    const unsubscribe = onSnapshot(userApplications, (querySnapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'applications'), (querySnapshot) => {
       const apps = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPipeline(apps);
       setPipelineLoading(false);
@@ -201,83 +185,10 @@ export default function App() {
     }
   };
 
-  const openApplication = (application) => {
+  const openApplication = (application, returnPage) => {
     setSelectedApplication(application);
-    setEditingApplication(false);
-    setEditError('');
-    setEditSuccess('');
+    setApplicationReturnPage(returnPage);
     setApplicationActionSuccess('');
-  };
-
-  const startEditingApplication = () => {
-    setEditForm({
-      borrower: selectedApplication.borrower || '',
-      applicantEmail: selectedApplication.applicantEmail || '',
-      phone: selectedApplication.phone || '',
-      location: selectedApplication.location || '',
-      loanRequested: selectedApplication.loanRequested || ''
-    });
-    setEditError('');
-    setEditSuccess('');
-    setEditingApplication(true);
-  };
-
-  const handleEditApplication = async (e) => {
-    e.preventDefault();
-    setEditBusy(true);
-    setEditError('');
-    setEditSuccess('');
-    const updatedFields = {
-      borrower: editForm.borrower.trim(),
-      applicantEmail: editForm.applicantEmail.trim(),
-      phone: editForm.phone.trim(),
-      location: editForm.location.trim(),
-      loanRequested: editForm.loanRequested
-    };
-
-    try {
-      await updateDoc(doc(db, 'applications', selectedApplication.id), updatedFields);
-      setSelectedApplication(current => ({ ...current, ...updatedFields }));
-      setEditingApplication(false);
-      setEditSuccess('Application updated successfully.');
-    } catch (error) {
-      console.error('Error updating application in Firebase:', error);
-      setEditError(
-        error.code === 'permission-denied'
-          ? 'Firebase denied this update. Update your Firestore rules to allow signed-in users to update applications.'
-          : `Could not update application: ${getErrorMessage(error)}`
-      );
-    } finally {
-      setEditBusy(false);
-    }
-  };
-
-  const handleDeleteApplication = async () => {
-    if (!selectedApplication || deletingApplication) return;
-
-    const confirmed = window.confirm(
-      `Delete the application for ${selectedApplication.borrower || 'this borrower'}? This cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setDeletingApplication(true);
-    setEditError('');
-    setApplicationActionSuccess('');
-    try {
-      await deleteDoc(doc(db, 'applications', selectedApplication.id));
-      setSelectedApplication(null);
-      setEditingApplication(false);
-      setApplicationActionSuccess('Application deleted successfully.');
-    } catch (error) {
-      console.error('Error deleting application from Firebase:', error);
-      setEditError(
-        error.code === 'permission-denied'
-          ? 'Firebase denied this deletion. Update your Firestore rules to allow signed-in users to delete applications.'
-          : `Could not delete application: ${getErrorMessage(error)}`
-      );
-    } finally {
-      setDeletingApplication(false);
-    }
   };
 
   const handleSearch = (e) => {
@@ -501,7 +412,7 @@ export default function App() {
               <ul className="application-list">
                 {pipeline.map(app => (
                   <li key={app.id} className="application-card">
-                    <button type="button" onClick={() => { openApplication(app); setPage('search'); }} className="application-card-link">
+                    <button type="button" onClick={() => { openApplication(app, 'pipeline'); setPage('application_view'); }} className="application-card-link">
                       <strong>{app.borrower || 'Unnamed borrower'}</strong> — €{app.loanRequested}
                     </button>
                     <span className="application-status">{app.status || 'Applied'}</span>
@@ -550,7 +461,7 @@ export default function App() {
                   <ul className="application-list">
                     {filteredApplications.map(application => (
                       <li key={application.id} className="application-card search-result-card">
-                        <button type="button" onClick={() => openApplication(application)} className="application-card-link">
+                        <button type="button" onClick={() => { openApplication(application, 'search'); setPage('application_view'); }} className="application-card-link">
                           <strong>{application.borrower || 'Unnamed borrower'}</strong> — €{application.loanRequested}
                         </button>
                         <div className="application-card-meta">{application.applicantEmail || 'No email'} · {application.location || 'No location'} · {getApplicationDate(application.timestamp) || 'Date unavailable'}</div>
@@ -559,44 +470,23 @@ export default function App() {
                   </ul>
                 </>
               ) : null}
-              {selectedApplication ? (
-                <article style={panelStyle} className="application-detail-card">
-                  <button type="button" className="back-to-results" onClick={() => { setSelectedApplication(null); setEditSuccess(''); }}>← Back to results</button>
-                  <h3>Application details</h3>
-                  {editingApplication ? (
-                    <form onSubmit={handleEditApplication}>
-                      <div className="form-grid">
-                        <label style={fieldStyle}>Borrower Name<input required value={editForm.borrower} onChange={e => setEditForm({ ...editForm, borrower: e.target.value })} style={inputStyle} /></label>
-                        <label style={fieldStyle}>Email<input required type="email" value={editForm.applicantEmail} onChange={e => setEditForm({ ...editForm, applicantEmail: e.target.value })} style={inputStyle} /></label>
-                        <label style={fieldStyle}>Phone Number<input required type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} style={inputStyle} /></label>
-                        <label style={fieldStyle}>Location<input required value={editForm.location} onChange={e => setEditForm({ ...editForm, location: e.target.value })} style={inputStyle} /></label>
-                        <label style={fieldStyle} className="loan-field">Loan Requested (€)<input className="loan-requested-input" required type="number" min="1" value={editForm.loanRequested} onChange={e => setEditForm({ ...editForm, loanRequested: e.target.value })} style={inputStyle} /></label>
-                      </div>
-                      <button type="submit" disabled={editBusy} className="primary-button">{editBusy ? 'Saving...' : 'Save changes'}</button>{' '}
-                      <button type="button" disabled={editBusy} onClick={() => setEditingApplication(false)} className="secondary-button">Cancel</button>
-                    </form>
-                  ) : (
-                    <>
-                      <dl className="application-detail-list">
-                        <div><dt>Borrower Name</dt><dd>{selectedApplication.borrower || 'Not provided'}</dd></div>
-                        <div><dt>Email</dt><dd>{selectedApplication.applicantEmail || 'Not provided'}</dd></div>
-                        <div><dt>Phone Number</dt><dd>{selectedApplication.phone || 'Not provided'}</dd></div>
-                        <div><dt>Location</dt><dd>{selectedApplication.location || 'Not provided'}</dd></div>
-                        <div><dt>Loan Requested</dt><dd>€{selectedApplication.loanRequested}</dd></div>
-                        <div><dt>Date Submitted</dt><dd>{getApplicationDate(selectedApplication.timestamp) || 'Unavailable'}</dd></div>
-                        <div><dt>Status</dt><dd>{selectedApplication.status || 'Applied'}</dd></div>
-                      </dl>
-                      <div className="application-detail-actions">
-                        <button type="button" onClick={startEditingApplication} className="primary-button detail-action-button">Edit</button>
-                        <button type="button" onClick={handleDeleteApplication} disabled={deletingApplication} className="delete-application-button detail-action-button">{deletingApplication ? 'Deleting...' : 'Delete'}</button>
-                      </div>
-                    </>
-                  )}
-                  {editError ? <p role="alert" className="error-message">{editError}</p> : null}
-                  {editSuccess ? <p role="status" className="success-message">{editSuccess}</p> : null}
-                </article>
-              ) : null}
             </section>
+          ) : null}
+
+          {page === 'application_view' && selectedApplication ? (
+            <ApplicationView
+              application={selectedApplication}
+              user={user}
+              onBack={() => {
+                setSelectedApplication(null);
+                setPage(applicationReturnPage);
+              }}
+              onDeleted={() => {
+                setSelectedApplication(null);
+                setPage('pipeline');
+                setApplicationActionSuccess('Application deleted successfully.');
+              }}
+            />
           ) : null}
 
           {page === 'profile' ? (
