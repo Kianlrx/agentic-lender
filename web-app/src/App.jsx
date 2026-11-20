@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useRef, useState, useEffect } from 'react';
 import './App.css';
 import { auth, db } from './firebase';
-import ApplicationView from './ApplicationView';
+import ApplicationView, { getApplicationStatusClassName } from './ApplicationView';
 import {
   createUserWithEmailAndPassword,
   EmailAuthProvider,
@@ -415,7 +415,9 @@ export default function App() {
                     <button type="button" onClick={() => { openApplication(app, 'pipeline'); setPage('application_view'); }} className="application-card-link">
                       <strong>{app.borrower || 'Unnamed borrower'}</strong> — €{app.loanRequested}
                     </button>
-                    <span className="application-status">{app.status || 'Applied'}</span>
+                    <span className={`application-status ${getApplicationStatusClassName(app.status)}`}>
+                      {app.status || 'Applied'}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -485,6 +487,10 @@ export default function App() {
                 setSelectedApplication(null);
                 setPage('pipeline');
                 setApplicationActionSuccess('Application deleted successfully.');
+              }}
+              onDecisionComplete={() => {
+                setSelectedApplication(null);
+                setPage('pipeline');
               }}
             />
           ) : null}

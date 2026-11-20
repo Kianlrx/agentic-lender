@@ -74,6 +74,24 @@
   font-weight: 700;
 }
 
+.application-view-status.is-applied {
+  border-color: #6ca8c5;
+  background: #add8e6;
+  color: #14384a;
+}
+
+.application-view-status.is-approved {
+  border-color: #157347;
+  background: #198754;
+  color: #fff;
+}
+
+.application-view-status.is-declined {
+  border-color: #a61f1f;
+  background: #c62828;
+  color: #fff;
+}
+
 .application-view-panel {
   padding: clamp(1rem, 3vw, 1.5rem);
   border: 1px solid var(--border);
