@@ -5,6 +5,14 @@ import './ApplicationView.css';
 
 const aiApiUrl = (import.meta.env.VITE_AI_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
+export const getApplicationStatusClassName = (status) => {
+  const normalizedStatus = String(status || 'Applied').trim().toLowerCase();
+  if (normalizedStatus === 'applied') return 'is-applied';
+  if (normalizedStatus === 'approved') return 'is-approved';
+  if (normalizedStatus === 'denied' || normalizedStatus === 'declined') return 'is-declined';
+  return '';
+};
+
 const agentHighlights = {
   'Affordability Agent': [
     ['Gross annual income', 'gross_yearly_income'],
@@ -150,7 +158,13 @@ function AgentCard({ agent }) {
   );
 }
 
-export default function ApplicationView({ application: initialApplication, user, onBack, onDeleted }) {
+export default function ApplicationView({
+  application: initialApplication,
+  user,
+  onBack,
+  onDeleted,
+  onDecisionComplete
+}) {
   const [application, setApplication] = useState(initialApplication);
   const [assessment, setAssessment] = useState(null);
   const [assessmentError, setAssessmentError] = useState('');
@@ -268,6 +282,7 @@ export default function ApplicationView({ application: initialApplication, user,
           decidedAt: serverTimestamp()
         }
       });
+      onDecisionComplete();
     } catch (error) {
       setActionError(`Could not save the underwriter decision: ${error.message}`);
     } finally {
@@ -310,7 +325,9 @@ export default function ApplicationView({ application: initialApplication, user,
             {application.applicantEmail || 'No email'} · Application ID: {application.id}
           </p>
         </div>
-        <span className="application-view-status">{application.status || 'Applied'}</span>
+        <span className={`application-view-status ${getApplicationStatusClassName(application.status)}`}>
+          {application.status || 'Applied'}
+        </span>
       </header>
 
       <section className="application-view-panel">
