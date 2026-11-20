@@ -16,5 +16,9 @@ google-genai==2.32.0
 # Firestore (only for --firestore / --list / --write-back)
 firebase-admin==7.7.0
 
+# Authenticated API for underwriter-triggered assessments
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+
 # Tests
 pytest==9.1.1

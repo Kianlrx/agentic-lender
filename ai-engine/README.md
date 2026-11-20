@@ -45,10 +45,35 @@ warnings to LLMs, never names or other personal data.
 
 1. Firebase console > Project settings > Service accounts > **Generate new private key**.
 2. Save the JSON **outside the repo** (or name it `*service-account*.json`, which is gitignored).
-3. In `.env`: `GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json`
+3. In `.env`, set `GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json`
+   and `FIREBASE_PROJECT_ID=benchodlender`. The project ID must match the web
+   app's Firebase project.
 4. Web app applications (the mortgage form saved under `applicationData`) are mapped by
    `al_ai/web_form.py`. Every assumption it makes is listed in the result's `notes`, for example
    "Property type 'House' valued as semi-detached".
+
+### Underwriter-triggered AI API
+
+The web app's **Start AI Analysis** button calls this API. Run it in a separate
+terminal from the web app, with the Firestore service-account configuration
+above:
+
+```powershell
+cd ai-engine
+.\.venv\Scripts\Activate.ps1
+$env:WEB_APP_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+python api.py
+```
+
+The API listens on `http://127.0.0.1:8000` by default. It verifies the caller's
+Firebase ID token, checks AI consent, runs the committee, and saves the full
+assessment and summary to Firestore. Configure `VITE_AI_API_URL` in the web
+app's build environment when the API is hosted elsewhere. Until account roles
+are implemented, any signed-in user can trigger an assessment. The API does
+not make or mint lending decisions.
+
+`watch.py` remains available as a command-line alternative for automatically
+assessing submitted applications; it is not required for the button workflow.
 
 ### What the web form gives the engine
 
